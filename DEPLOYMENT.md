@@ -41,9 +41,9 @@ git push -u origin main
 4. 配置设置：
    - **Name**: `lottery-prediction-system`
    - **Branch**: `main`（或您的主分支）
-   - **Root Directory**: 留空（根目录）
+   - **Root Directory**: 留空
    - **Build Command**: 留空
-   - **Publish Directory**: 留空（根目录）
+   - **Publish Directory**: `.`（表示根目录）
 
 #### 3.3 高级配置（可选）
 如果需要自定义配置：
