@@ -16,6 +16,7 @@ class LotterySystem {
         this.displayMyPicks();
         this.generateRecommendations();
         this.initSSQSystem();
+        this.initHistoryData();
     }
 
     // 生成模拟历史数据
@@ -23,7 +24,8 @@ class LotterySystem {
         const data = [];
         const today = new Date();
         
-        for (let i = 0; i < 100; i++) {
+        // 生成300期数据
+        for (let i = 0; i < 300; i++) {
             const date = new Date(today);
             date.setDate(date.getDate() - i);
             
@@ -32,15 +34,23 @@ class LotterySystem {
                 date: date.toISOString().split('T')[0],
                 number: String(Math.floor(Math.random() * 1000)).padStart(3, '0'),
                 sum: 0,
-                span: 0
+                span: 0,
+                oddCount: 0,
+                evenCount: 0,
+                bigCount: 0,
+                smallCount: 0
             });
         }
         
-        // 计算和值和跨度
+        // 计算和值、跨度、奇偶比、大小比
         data.forEach(item => {
             const digits = item.number.split('').map(Number);
             item.sum = digits.reduce((a, b) => a + b, 0);
             item.span = Math.max(...digits) - Math.min(...digits);
+            item.oddCount = digits.filter(d => d % 2 === 1).length;
+            item.evenCount = digits.filter(d => d % 2 === 0).length;
+            item.bigCount = digits.filter(d => d >= 5).length;
+            item.smallCount = digits.filter(d => d < 5).length;
         });
         
         return data;
@@ -51,7 +61,8 @@ class LotterySystem {
         const data = [];
         const today = new Date();
         
-        for (let i = 0; i < 100; i++) {
+        // 生成300期数据
+        for (let i = 0; i < 300; i++) {
             const date = new Date(today);
             date.setDate(date.getDate() - i);
             
@@ -75,7 +86,9 @@ class LotterySystem {
                 blueBall: blueBall,
                 redSum: redBalls.reduce((a, b) => a + b, 0),
                 redOddCount: redBalls.filter(n => n % 2 === 1).length,
-                redBigCount: redBalls.filter(n => n > 16).length
+                redEvenCount: redBalls.filter(n => n % 2 === 0).length,
+                redBigCount: redBalls.filter(n => n > 16).length,
+                redSmallCount: redBalls.filter(n => n <= 16).length
             });
         }
         
@@ -121,6 +134,9 @@ class LotterySystem {
 
         // 双色球事件监听器
         this.setupSSQEventListeners();
+        
+        // 往期数据事件监听器
+        this.setupHistoryEventListeners();
     }
 
     // 设置双色球事件监听器
@@ -800,6 +816,234 @@ class LotterySystem {
         if (this.ssqPicks.length > 0) {
             console.log('双色球选号记录:', this.ssqPicks);
         }
+    }
+
+    // ==================== 往期数据相关方法 ====================
+
+    // 初始化往期数据系统
+    initHistoryData() {
+        this.fc3dCurrentPage = 1;
+        this.ssqCurrentPage = 1;
+        this.fc3dItemsPerPage = 20;
+        this.ssqItemsPerPage = 20;
+        this.fc3dFilteredData = this.historyData;
+        this.ssqFilteredData = this.ssqHistoryData;
+        
+        this.displayFc3dHistory();
+        this.displaySsqHistory();
+    }
+
+    // 设置往期数据事件监听器
+    setupHistoryEventListeners() {
+        // 福彩3D历史数据标签页
+        document.querySelectorAll('.history-tabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.switchHistoryTab(e.target.dataset.tab);
+            });
+        });
+
+        // 福彩3D搜索和筛选
+        document.getElementById('searchFc3dBtn').addEventListener('click', () => {
+            this.searchFc3dHistory();
+        });
+
+        document.getElementById('showAllFc3dBtn').addEventListener('click', () => {
+            this.showAllFc3dHistory();
+        });
+
+        document.getElementById('fc3dPeriodFilter').addEventListener('change', () => {
+            this.filterFc3dHistory();
+        });
+
+        document.getElementById('fc3dPeriodSearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.searchFc3dHistory();
+            }
+        });
+
+        // 福彩3D分页
+        document.getElementById('fc3dPrevPage').addEventListener('click', () => {
+            this.fc3dCurrentPage--;
+            this.displayFc3dHistory();
+        });
+
+        document.getElementById('fc3dNextPage').addEventListener('click', () => {
+            this.fc3dCurrentPage++;
+            this.displayFc3dHistory();
+        });
+
+        // 双色球搜索和筛选
+        document.getElementById('searchSsqBtn').addEventListener('click', () => {
+            this.searchSsqHistory();
+        });
+
+        document.getElementById('showAllSsqBtn').addEventListener('click', () => {
+            this.showAllSsqHistory();
+        });
+
+        document.getElementById('ssqPeriodFilter').addEventListener('change', () => {
+            this.filterSsqHistory();
+        });
+
+        document.getElementById('ssqPeriodSearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.searchSsqHistory();
+            }
+        });
+
+        // 双色球分页
+        document.getElementById('ssqPrevPage').addEventListener('click', () => {
+            this.ssqCurrentPage--;
+            this.displaySsqHistory();
+        });
+
+        document.getElementById('ssqNextPage').addEventListener('click', () => {
+            this.ssqCurrentPage++;
+            this.displaySsqHistory();
+        });
+    }
+
+    // 切换往期数据标签页
+    switchHistoryTab(tabName) {
+        // 移除所有活动状态
+        document.querySelectorAll('.history-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('#fc3d-history, #ssq-history').forEach(content => content.classList.remove('active'));
+        
+        // 激活选中的标签页
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+    }
+
+    // 搜索福彩3D历史数据
+    searchFc3dHistory() {
+        const searchTerm = document.getElementById('fc3dPeriodSearch').value;
+        if (searchTerm) {
+            this.fc3dFilteredData = this.historyData.filter(item => 
+                item.period.includes(searchTerm)
+            );
+        } else {
+            this.fc3dFilteredData = this.historyData;
+        }
+        this.fc3dCurrentPage = 1;
+        this.displayFc3dHistory();
+    }
+
+    // 显示所有福彩3D历史数据
+    showAllFc3dHistory() {
+        this.fc3dFilteredData = this.historyData;
+        this.fc3dCurrentPage = 1;
+        this.displayFc3dHistory();
+        document.getElementById('fc3dPeriodSearch').value = '';
+    }
+
+    // 筛选福彩3D历史数据
+    filterFc3dHistory() {
+        const filterValue = document.getElementById('fc3dPeriodFilter').value;
+        if (filterValue === 'all') {
+            this.fc3dFilteredData = this.historyData;
+        } else {
+            const count = parseInt(filterValue);
+            this.fc3dFilteredData = this.historyData.slice(0, count);
+        }
+        this.fc3dCurrentPage = 1;
+        this.displayFc3dHistory();
+    }
+
+    // 显示福彩3D历史数据
+    displayFc3dHistory() {
+        const tbody = document.getElementById('fc3dHistoryBody');
+        const totalPages = Math.ceil(this.fc3dFilteredData.length / this.fc3dItemsPerPage);
+        
+        // 计算当前页数据
+        const startIndex = (this.fc3dCurrentPage - 1) * this.fc3dItemsPerPage;
+        const endIndex = startIndex + this.fc3dItemsPerPage;
+        const currentPageData = this.fc3dFilteredData.slice(startIndex, endIndex);
+        
+        // 生成表格行
+        tbody.innerHTML = currentPageData.map(item => `
+            <tr>
+                <td>${item.period}</td>
+                <td>${item.date}</td>
+                <td class="number-cell">${item.number}</td>
+                <td>${item.sum}</td>
+                <td>${item.span}</td>
+                <td>${item.oddCount}:${item.evenCount}</td>
+                <td>${item.bigCount}:${item.smallCount}</td>
+            </tr>
+        `).join('');
+        
+        // 更新分页信息
+        document.getElementById('fc3dPageInfo').textContent = `第 ${this.fc3dCurrentPage} 页，共 ${totalPages} 页`;
+        
+        // 更新分页按钮状态
+        document.getElementById('fc3dPrevPage').disabled = this.fc3dCurrentPage <= 1;
+        document.getElementById('fc3dNextPage').disabled = this.fc3dCurrentPage >= totalPages;
+    }
+
+    // 搜索双色球历史数据
+    searchSsqHistory() {
+        const searchTerm = document.getElementById('ssqPeriodSearch').value;
+        if (searchTerm) {
+            this.ssqFilteredData = this.ssqHistoryData.filter(item => 
+                item.period.includes(searchTerm)
+            );
+        } else {
+            this.ssqFilteredData = this.ssqHistoryData;
+        }
+        this.ssqCurrentPage = 1;
+        this.displaySsqHistory();
+    }
+
+    // 显示所有双色球历史数据
+    showAllSsqHistory() {
+        this.ssqFilteredData = this.ssqHistoryData;
+        this.ssqCurrentPage = 1;
+        this.displaySsqHistory();
+        document.getElementById('ssqPeriodSearch').value = '';
+    }
+
+    // 筛选双色球历史数据
+    filterSsqHistory() {
+        const filterValue = document.getElementById('ssqPeriodFilter').value;
+        if (filterValue === 'all') {
+            this.ssqFilteredData = this.ssqHistoryData;
+        } else {
+            const count = parseInt(filterValue);
+            this.ssqFilteredData = this.ssqHistoryData.slice(0, count);
+        }
+        this.ssqCurrentPage = 1;
+        this.displaySsqHistory();
+    }
+
+    // 显示双色球历史数据
+    displaySsqHistory() {
+        const tbody = document.getElementById('ssqHistoryBody');
+        const totalPages = Math.ceil(this.ssqFilteredData.length / this.ssqItemsPerPage);
+        
+        // 计算当前页数据
+        const startIndex = (this.ssqCurrentPage - 1) * this.ssqItemsPerPage;
+        const endIndex = startIndex + this.ssqItemsPerPage;
+        const currentPageData = this.ssqFilteredData.slice(startIndex, endIndex);
+        
+        // 生成表格行
+        tbody.innerHTML = currentPageData.map(item => `
+            <tr>
+                <td>${item.period}</td>
+                <td>${item.date}</td>
+                <td class="red-balls-cell">${item.redBalls.map(ball => `<span class="red-ball-small">${ball}</span>`).join('')}</td>
+                <td class="blue-ball-cell"><span class="blue-ball-small">${item.blueBall}</span></td>
+                <td>${item.redSum}</td>
+                <td>${item.redOddCount}:${item.redEvenCount}</td>
+                <td>${item.redBigCount}:${item.redSmallCount}</td>
+            </tr>
+        `).join('');
+        
+        // 更新分页信息
+        document.getElementById('ssqPageInfo').textContent = `第 ${this.ssqCurrentPage} 页，共 ${totalPages} 页`;
+        
+        // 更新分页按钮状态
+        document.getElementById('ssqPrevPage').disabled = this.ssqCurrentPage <= 1;
+        document.getElementById('ssqNextPage').disabled = this.ssqCurrentPage >= totalPages;
     }
 }
 

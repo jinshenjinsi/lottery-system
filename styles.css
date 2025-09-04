@@ -629,3 +629,292 @@ section {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* 往期数据样式 */
+.history-data {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.history-data h2 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 1.3rem;
+    text-align: center;
+}
+
+.history-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.history-tabs .tab-btn {
+    background: none;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    font-size: 1rem;
+    color: #666;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+}
+
+.history-tabs .tab-btn.active {
+    background: #667eea;
+    color: white;
+    border-bottom-color: #667eea;
+}
+
+.history-tabs .tab-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.history-tabs .tab-btn.active:hover {
+    background: #5a6fd8;
+}
+
+.history-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.search-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-controls input {
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    width: 150px;
+    transition: border-color 0.3s ease;
+}
+
+.search-controls input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.filter-controls select {
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+}
+
+.filter-controls select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.history-table-container {
+    overflow-x: auto;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 0.9rem;
+}
+
+.history-table th {
+    background: #667eea;
+    color: white;
+    padding: 12px 8px;
+    text-align: center;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.history-table td {
+    padding: 10px 8px;
+    text-align: center;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s ease;
+}
+
+.history-table tr:hover {
+    background-color: #f8f9ff;
+}
+
+.number-cell {
+    font-weight: 600;
+    color: #667eea;
+    font-size: 1.1rem;
+}
+
+.red-balls-cell {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.blue-ball-cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.red-ball-small {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background: #e74c3c;
+    color: white;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.blue-ball-small {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background: #3498db;
+    color: white;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.history-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.history-pagination button {
+    padding: 8px 16px;
+    border: 2px solid #667eea;
+    background: white;
+    color: #667eea;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.history-pagination button:hover:not(:disabled) {
+    background: #667eea;
+    color: white;
+}
+
+.history-pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.history-pagination span {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+/* 往期数据移动端优化 */
+@media (max-width: 768px) {
+    .history-data {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .history-data h2 {
+        font-size: 1.2rem;
+        margin-bottom: 15px;
+    }
+    
+    .history-tabs {
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 15px;
+    }
+    
+    .history-tabs .tab-btn {
+        padding: 10px 15px;
+        font-size: 0.9rem;
+        border-radius: 8px;
+        border-bottom: none;
+    }
+    
+    .history-controls {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+    
+    .search-controls {
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    .search-controls input {
+        width: 100%;
+    }
+    
+    .filter-controls {
+        width: 100%;
+    }
+    
+    .filter-controls select {
+        width: 100%;
+    }
+    
+    .history-table {
+        font-size: 0.8rem;
+    }
+    
+    .history-table th,
+    .history-table td {
+        padding: 8px 4px;
+    }
+    
+    .red-ball-small,
+    .blue-ball-small {
+        width: 20px;
+        height: 20px;
+        line-height: 20px;
+        font-size: 0.7rem;
+    }
+    
+    .history-pagination {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .history-pagination button {
+        width: 100%;
+        padding: 10px;
+    }
+}

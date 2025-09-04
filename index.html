@@ -209,6 +209,101 @@
                 </div>
             </section>
 
+            <!-- 往期数据查询 -->
+            <section class="history-data">
+                <h2>📊 往期数据查询</h2>
+                <div class="history-tabs">
+                    <button class="tab-btn active" data-tab="fc3d-history">福彩3D历史</button>
+                    <button class="tab-btn" data-tab="ssq-history">双色球历史</button>
+                </div>
+                
+                <!-- 福彩3D历史数据 -->
+                <div class="tab-content active" id="fc3d-history">
+                    <div class="history-controls">
+                        <div class="search-controls">
+                            <input type="number" id="fc3dPeriodSearch" placeholder="输入期号搜索" min="1" max="999">
+                            <button id="searchFc3dBtn" class="btn btn-primary">🔍 搜索</button>
+                            <button id="showAllFc3dBtn" class="btn btn-secondary">📋 显示全部</button>
+                        </div>
+                        <div class="filter-controls">
+                            <select id="fc3dPeriodFilter">
+                                <option value="all">全部期数</option>
+                                <option value="30">最近30期</option>
+                                <option value="50">最近50期</option>
+                                <option value="100">最近100期</option>
+                                <option value="300">最近300期</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="history-table-container">
+                        <table class="history-table" id="fc3dHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>期号</th>
+                                    <th>开奖日期</th>
+                                    <th>开奖号码</th>
+                                    <th>和值</th>
+                                    <th>跨度</th>
+                                    <th>奇偶比</th>
+                                    <th>大小比</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fc3dHistoryBody">
+                                <!-- 数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="history-pagination">
+                        <button id="fc3dPrevPage" class="btn btn-outline">⬅️ 上一页</button>
+                        <span id="fc3dPageInfo">第 1 页，共 1 页</span>
+                        <button id="fc3dNextPage" class="btn btn-outline">下一页 ➡️</button>
+                    </div>
+                </div>
+
+                <!-- 双色球历史数据 -->
+                <div class="tab-content" id="ssq-history">
+                    <div class="history-controls">
+                        <div class="search-controls">
+                            <input type="number" id="ssqPeriodSearch" placeholder="输入期号搜索" min="1" max="999">
+                            <button id="searchSsqBtn" class="btn btn-primary">🔍 搜索</button>
+                            <button id="showAllSsqBtn" class="btn btn-secondary">📋 显示全部</button>
+                        </div>
+                        <div class="filter-controls">
+                            <select id="ssqPeriodFilter">
+                                <option value="all">全部期数</option>
+                                <option value="30">最近30期</option>
+                                <option value="50">最近50期</option>
+                                <option value="100">最近100期</option>
+                                <option value="300">最近300期</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="history-table-container">
+                        <table class="history-table" id="ssqHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>期号</th>
+                                    <th>开奖日期</th>
+                                    <th>红球号码</th>
+                                    <th>蓝球</th>
+                                    <th>红球和值</th>
+                                    <th>奇偶比</th>
+                                    <th>大小比</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ssqHistoryBody">
+                                <!-- 数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="history-pagination">
+                        <button id="ssqPrevPage" class="btn btn-outline">⬅️ 上一页</button>
+                        <span id="ssqPageInfo">第 1 页，共 1 页</span>
+                        <button id="ssqNextPage" class="btn btn-outline">下一页 ➡️</button>
+                    </div>
+                </div>
+            </section>
+
             <!-- 我的选号记录 -->
             <section class="my-picks">
                 <h2>📝 我的选号记录</h2>
