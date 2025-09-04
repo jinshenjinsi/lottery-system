@@ -531,43 +531,115 @@ class LotterySystem {
         // 清空画布
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 设置样式
-        ctx.strokeStyle = '#667eea';
-        ctx.lineWidth = 2;
-        ctx.fillStyle = '#667eea';
-        
-        // 绘制坐标轴
-        ctx.beginPath();
-        ctx.moveTo(50, 50);
-        ctx.lineTo(50, canvas.height - 50);
-        ctx.lineTo(canvas.width - 50, canvas.height - 50);
-        ctx.stroke();
-        
-        // 绘制和值走势
+        // 画布与坐标系边距
+        const paddingLeft = 50;
+        const paddingRight = 50;
+        const paddingTop = 40;
+        const paddingBottom = 50;
+
+        // 颜色与样式
+        const axisColor = '#444';
+        const gridColor = '#e6e8f2';
+        const lineColor = '#667eea';
+        const pointColor = '#667eea';
+        const textColor = '#333';
+
+        // 数据准备
         const recentData = this.historyData.slice(0, 20);
-        const points = recentData.map((item, index) => ({
-            x: 50 + (index * (canvas.width - 100) / (recentData.length - 1)),
-            y: canvas.height - 50 - (item.sum * (canvas.height - 100) / 27)
-        }));
-        
+        if (recentData.length === 0) return;
+        const plotWidth = canvas.width - paddingLeft - paddingRight;
+        const plotHeight = canvas.height - paddingTop - paddingBottom;
+
+        // 轴域：和值范围 0~27
+        const yMin = 0;
+        const yMax = 27;
+        const yRange = yMax - yMin;
+
+        // 辅助函数：映射到坐标
+        const xScale = (i) => paddingLeft + (i * (plotWidth / Math.max(1, (recentData.length - 1))));
+        const yScale = (val) => paddingTop + (plotHeight - (val - yMin) * (plotHeight / yRange));
+
+        // 背景网格与Y轴刻度（每3为一格：0,3,6,...,27）
+        ctx.strokeStyle = gridColor;
+        ctx.fillStyle = textColor;
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let y = yMin; y <= yMax; y += 3) {
+            const yPos = yScale(y);
+            // 网格线
+            ctx.beginPath();
+            ctx.moveTo(paddingLeft, yPos);
+            ctx.lineTo(canvas.width - paddingRight, yPos);
+            ctx.stroke();
+            // 刻度值
+            ctx.fillText(String(y), paddingLeft - 8, yPos);
+        }
+
+        // X轴刻度（显示第1、5、10、15、20个点）
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let i = 0; i < recentData.length; i++) {
+            if ([0, 4, 9, 14, 19].includes(i)) {
+                const x = xScale(i);
+                // 小刻度线
+                ctx.strokeStyle = gridColor;
+                ctx.beginPath();
+                ctx.moveTo(x, canvas.height - paddingBottom);
+                ctx.lineTo(x, paddingTop);
+                ctx.stroke();
+                // 刻度值（序号）
+                ctx.fillText(String(i + 1), x, canvas.height - paddingBottom + 6);
+            }
+        }
+
+        // 坐标轴
+        ctx.strokeStyle = axisColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        // Y轴
+        ctx.moveTo(paddingLeft, paddingTop);
+        ctx.lineTo(paddingLeft, canvas.height - paddingBottom);
+        // X轴
+        ctx.lineTo(canvas.width - paddingRight, canvas.height - paddingBottom);
+        ctx.stroke();
+
+        // 轴标题
+        ctx.fillStyle = textColor;
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('期序', paddingLeft + plotWidth / 2, canvas.height - 12);
+        ctx.save();
+        ctx.translate(16, paddingTop + plotHeight / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('和值', 0, 0);
+        ctx.restore();
+
+        // 值走势线
+        const points = recentData.map((item, index) => ({ x: xScale(index), y: yScale(item.sum) }));
+
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
-        points.forEach(point => {
-            ctx.lineTo(point.x, point.y);
-        });
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
         ctx.stroke();
-        
-        // 绘制数据点
+
+        // 数据点
+        ctx.fillStyle = pointColor;
         points.forEach(point => {
             ctx.beginPath();
-            ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+            ctx.arc(point.x, point.y, 3.5, 0, 2 * Math.PI);
             ctx.fill();
         });
         
-        // 添加标签
-        ctx.fillStyle = '#333';
+        // 标题
+        ctx.fillStyle = textColor;
         ctx.font = '14px Arial';
-        ctx.fillText('和值走势图', canvas.width / 2 - 50, 30);
+        ctx.textAlign = 'center';
+        ctx.fillText('和值走势图', paddingLeft + plotWidth / 2, 24);
     }
 
     // 生成推荐号码
@@ -991,11 +1063,45 @@ class LotterySystem {
         
         if (updateBtn) {
             updateBtn.addEventListener('click', async () => {
-                await this.loadRealData();
-                this.updateAnalysis();
-                this.displayFc3dHistory();
-                this.displaySsqHistory();
-                this.updateDataSourceDisplay();
+                // 临时启用网络更新（即使iOS安全模式也允许手动更新）
+                const originalNetworkState = this.enableNetwork;
+                this.enableNetwork = true;
+                
+                try {
+                    await this.loadRealData();
+                    this.updateAnalysis();
+                    this.displayFc3dHistory();
+                    this.displaySsqHistory();
+                    this.updateDataSourceDisplay();
+                    this.updateLatestDates();
+                    
+                    // 显示更新结果
+                    const btn = document.getElementById('updateDataBtn');
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = '✅ 更新成功';
+                        btn.style.background = '#28a745';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.background = '';
+                        }, 2000);
+                    }
+                } catch (error) {
+                    console.log('手动更新失败:', error);
+                    const btn = document.getElementById('updateDataBtn');
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = '❌ 更新失败';
+                        btn.style.background = '#dc3545';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.background = '';
+                        }, 2000);
+                    }
+                } finally {
+                    // 恢复原始网络状态
+                    this.enableNetwork = originalNetworkState;
+                }
             });
         }
     }
@@ -1055,12 +1161,12 @@ class LotterySystem {
         try {
             // 使用多个免费数据源，提高成功率
             const dataSources = [
-                // 365彩票开奖网 - 免费API
+                // 使用JSONP或CORS友好的数据源
+                'https://api.allorigins.win/get?url=' + encodeURIComponent('https://kj.365kai.com/api/fc3d/latest'),
+                'https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.caipiaodate.com/fc3d/latest'),
+                // 备用：直接尝试（可能被CORS阻止）
                 'https://kj.365kai.com/api/fc3d/latest',
-                // 彩票之家 - 免费接口
-                'https://api.caipiaodate.com/fc3d/latest',
-                // 备用数据源
-                'https://api.500.com/lottery/fc3d/history'
+                'https://api.caipiaodate.com/fc3d/latest'
             ];
             
             for (const source of dataSources) {
@@ -1075,9 +1181,20 @@ class LotterySystem {
                     });
                     
                     if (response.ok) {
-                        const data = await response.json();
-                        if (data && data.length > 0) {
-                            return this.formatFc3dData(data);
+                        const responseData = await response.json();
+                        let data = responseData;
+                        
+                        // 处理CORS代理响应
+                        if (responseData.contents) {
+                            try {
+                                data = JSON.parse(responseData.contents);
+                            } catch (e) {
+                                data = responseData.contents;
+                            }
+                        }
+                        
+                        if (data && (Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0)) {
+                            return this.formatFc3dData(Array.isArray(data) ? data : [data]);
                         }
                     }
                 } catch (error) {
@@ -1099,12 +1216,12 @@ class LotterySystem {
     async fetchSsqData() {
         try {
             const dataSources = [
-                // 365彩票开奖网 - 免费API
+                // 使用CORS代理
+                'https://api.allorigins.win/get?url=' + encodeURIComponent('https://kj.365kai.com/api/ssq/latest'),
+                'https://api.allorigins.win/get?url=' + encodeURIComponent('https://api.caipiaodate.com/ssq/latest'),
+                // 备用：直接尝试
                 'https://kj.365kai.com/api/ssq/latest',
-                // 彩票之家 - 免费接口
-                'https://api.caipiaodate.com/ssq/latest',
-                // 备用数据源
-                'https://api.500.com/lottery/ssq/history'
+                'https://api.caipiaodate.com/ssq/latest'
             ];
             
             for (const source of dataSources) {
@@ -1119,9 +1236,20 @@ class LotterySystem {
                     });
                     
                     if (response.ok) {
-                        const data = await response.json();
-                        if (data && data.length > 0) {
-                            return this.formatSsqData(data);
+                        const responseData = await response.json();
+                        let data = responseData;
+                        
+                        // 处理CORS代理响应
+                        if (responseData.contents) {
+                            try {
+                                data = JSON.parse(responseData.contents);
+                            } catch (e) {
+                                data = responseData.contents;
+                            }
+                        }
+                        
+                        if (data && (Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0)) {
+                            return this.formatSsqData(Array.isArray(data) ? data : [data]);
                         }
                     }
                 } catch (error) {
