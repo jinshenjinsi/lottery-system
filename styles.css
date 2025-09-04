@@ -668,6 +668,17 @@ section {
     font-weight: 600;
 }
 
+.data-source-info {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.data-source-info span {
+    color: #28a745;
+    font-weight: 600;
+}
+
 .network-toggle {
     display: flex;
     align-items: center;

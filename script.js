@@ -12,6 +12,7 @@ class LotterySystem {
         if (this.enableNetwork === null || this.enableNetwork === undefined) {
             this.enableNetwork = !this.isIOS; // iOS默认false，其他平台默认true
         }
+        this.dataSource = '本地缓存'; // 默认数据来源
         this.init();
     }
 
@@ -22,7 +23,10 @@ class LotterySystem {
         this.displayMyPicks();
         this.generateRecommendations();
         this.initSSQSystem();
-        this.initHistoryData();
+        this.initHistoryData().then(() => {
+            this.updateLatestDates();
+            this.updateDataSourceDisplay();
+        });
         // 初始化网络开关UI
         const toggle = document.getElementById('enableNetworkToggle');
         if (toggle) {
@@ -35,6 +39,8 @@ class LotterySystem {
                         this.updateAnalysis();
                         this.displayFc3dHistory();
                         this.displaySsqHistory();
+                        this.updateLatestDates();
+                        this.updateDataSourceDisplay();
                     });
                 }
             });
@@ -803,6 +809,20 @@ class LotterySystem {
         this.updateRedAnalysis();
     }
 
+    // 更新标题旁的最近开奖日期（取historyData与ssqHistoryData第一条）
+    updateLatestDates() {
+        const fc3dDate = this.historyData && this.historyData.length > 0 ? this.historyData[0].date : '-';
+        const ssqDate = this.ssqHistoryData && this.ssqHistoryData.length > 0 ? this.ssqHistoryData[0].date : '-';
+        const fc3dEl = document.getElementById('fc3dLatestDate');
+        const ssqEl = document.getElementById('ssqLatestDate');
+        if (fc3dEl) {
+            fc3dEl.textContent = fc3dDate !== '-' ? `（最近开奖：${fc3dDate}）` : '';
+        }
+        if (ssqEl) {
+            ssqEl.textContent = ssqDate !== '-' ? `（最近开奖：${ssqDate}）` : '';
+        }
+    }
+
     // 更新蓝球分析
     updateBlueAnalysis() {
         const recentData = this.ssqHistoryData.slice(0, 30);
@@ -975,6 +995,7 @@ class LotterySystem {
                 this.updateAnalysis();
                 this.displayFc3dHistory();
                 this.displaySsqHistory();
+                this.updateDataSourceDisplay();
             });
         }
     }
@@ -985,6 +1006,7 @@ class LotterySystem {
     async loadRealData() {
         if (!this.enableNetwork) {
             console.log('已禁用联网更新（安全模式）');
+            this.dataSource = '本地缓存（安全模式）';
             this.loadDataFromCache();
             return;
         }
@@ -1003,22 +1025,26 @@ class LotterySystem {
                     this.historyData = fc3dData;
                     this.saveDataToCache('fc3d', fc3dData);
                     console.log('福彩3D数据更新成功');
+                    this.dataSource = '真实API数据';
                 }
                 
                 if (ssqData && ssqData.length > 0) {
                     this.ssqHistoryData = ssqData;
                     this.saveDataToCache('ssq', ssqData);
                     console.log('双色球数据更新成功');
+                    this.dataSource = '真实API数据';
                 }
                 
                 this.updateLastUpdateTime();
             } else {
                 // 使用缓存数据
+                this.dataSource = '本地缓存';
                 this.loadDataFromCache();
             }
         } catch (error) {
             console.log('获取真实数据失败，使用模拟数据:', error);
             // 使用模拟数据作为备选
+            this.dataSource = '模拟数据（API失败）';
             this.historyData = this.generateMockHistoryData();
             this.ssqHistoryData = this.generateSSQHistoryData();
         }
@@ -1027,11 +1053,14 @@ class LotterySystem {
     // 获取福彩3D真实数据
     async fetchFc3dData() {
         try {
-            // 使用多个数据源，提高成功率
+            // 使用多个免费数据源，提高成功率
             const dataSources = [
-                'https://api.500.com/lottery/fc3d/history',
-                'https://api.lottery.com/fc3d/latest',
-                'https://api.caipiao.com/fc3d/history'
+                // 365彩票开奖网 - 免费API
+                'https://kj.365kai.com/api/fc3d/latest',
+                // 彩票之家 - 免费接口
+                'https://api.caipiaodate.com/fc3d/latest',
+                // 备用数据源
+                'https://api.500.com/lottery/fc3d/history'
             ];
             
             for (const source of dataSources) {
@@ -1070,9 +1099,12 @@ class LotterySystem {
     async fetchSsqData() {
         try {
             const dataSources = [
-                'https://api.500.com/lottery/ssq/history',
-                'https://api.lottery.com/ssq/latest',
-                'https://api.caipiao.com/ssq/history'
+                // 365彩票开奖网 - 免费API
+                'https://kj.365kai.com/api/ssq/latest',
+                // 彩票之家 - 免费接口
+                'https://api.caipiaodate.com/ssq/latest',
+                // 备用数据源
+                'https://api.500.com/lottery/ssq/history'
             ];
             
             for (const source of dataSources) {
@@ -1297,6 +1329,14 @@ class LotterySystem {
         const updateTimeElement = document.getElementById('lastUpdateTime');
         if (updateTimeElement) {
             updateTimeElement.textContent = now.toLocaleString('zh-CN');
+        }
+    }
+
+    // 更新数据来源显示
+    updateDataSourceDisplay() {
+        const dataSourceElement = document.getElementById('dataSource');
+        if (dataSourceElement) {
+            dataSourceElement.textContent = this.dataSource;
         }
     }
 

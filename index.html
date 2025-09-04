@@ -12,7 +12,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎲 福彩3D预选系统</h1>
+            <h1>🎲 福彩3D预选系统 <small id="fc3dLatestDate" style="font-size:0.9rem;color:#eef;opacity:.95;"></small></h1>
             <p class="subtitle">智能号码分析与推荐</p>
         </header>
 
@@ -121,7 +121,7 @@
 
             <!-- 双色球预测板块 -->
             <section class="ssq-prediction">
-                <h2>🔵 双色球预测系统</h2>
+                <h2>🔵 双色球预测系统 <small id="ssqLatestDate" style="font-weight:400;font-size:.9rem;color:#666;"></small></h2>
                 <div class="ssq-container">
                     <!-- 蓝球LSTM预测 -->
                     <div class="blue-ball-section">
@@ -219,6 +219,7 @@
                         <span>联网更新（iOS上可能触发验证）</span>
                     </label>
                     <span class="update-info">数据最后更新：<span id="lastUpdateTime">刚刚</span></span>
+                    <span class="data-source-info">数据来源：<span id="dataSource">本地缓存</span></span>
                 </div>
                 <div class="history-tabs">
                     <button class="tab-btn active" data-tab="fc3d-history">福彩3D历史</button>
