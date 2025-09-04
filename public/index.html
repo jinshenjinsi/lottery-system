@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#667eea">
+    <title>彩票预选系统</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎲 福彩3D预选系统</h1>
+            <p class="subtitle">智能号码分析与推荐</p>
+        </header>
+
+        <main>
+            <!-- 快速选号区域 -->
+            <section class="quick-pick">
+                <h2>快速选号</h2>
+                <div class="number-display">
+                    <div class="number-box" id="hundreds">0</div>
+                    <div class="number-box" id="tens">0</div>
+                    <div class="number-box" id="ones">0</div>
+                </div>
+                <div class="controls">
+                    <button id="randomBtn" class="btn btn-primary">🎲 随机选号</button>
+                    <button id="luckyBtn" class="btn btn-secondary">🍀 幸运号码</button>
+                    <button id="analyzeBtn" class="btn btn-success">📊 智能分析</button>
+                </div>
+            </section>
+
+            <!-- 手动选号区域 -->
+            <section class="manual-pick">
+                <h2>手动选号</h2>
+                <div class="number-selector">
+                    <div class="digit-selector">
+                        <label>百位</label>
+                        <select id="hundredsSelect">
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                    <div class="digit-selector">
+                        <label>十位</label>
+                        <select id="tensSelect">
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                    <div class="digit-selector">
+                        <label>个位</label>
+                        <select id="onesSelect">
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="confirmBtn" class="btn btn-primary">确认选号</button>
+            </section>
+
+            <!-- 历史数据分析 -->
+            <section class="analysis">
+                <h2>📈 数据分析</h2>
+                <div class="analysis-tabs">
+                    <button class="tab-btn active" data-tab="hot-cold">热号冷号</button>
+                    <button class="tab-btn" data-tab="trend">走势分析</button>
+                    <button class="tab-btn" data-tab="pattern">号码规律</button>
+                </div>
+                
+                <div class="tab-content active" id="hot-cold">
+                    <div class="hot-numbers">
+                        <h3>🔥 热号 (最近30期)</h3>
+                        <div class="number-grid" id="hotNumbers"></div>
+                    </div>
+                    <div class="cold-numbers">
+                        <h3>❄️ 冷号 (最近30期)</h3>
+                        <div class="number-grid" id="coldNumbers"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="trend">
+                    <div class="trend-chart">
+                        <h3>📊 号码走势图</h3>
+                        <div class="chart-container">
+                            <canvas id="trendCanvas" width="800" height="400"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="pattern">
+                    <div class="pattern-analysis">
+                        <h3>🔍 号码规律分析</h3>
+                        <div class="pattern-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">奇偶比例</span>
+                                <span class="stat-value" id="oddEvenRatio">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">大小比例</span>
+                                <span class="stat-value" id="bigSmallRatio">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">和值范围</span>
+                                <span class="stat-value" id="sumRange">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">跨度分析</span>
+                                <span class="stat-value" id="spanAnalysis">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 推荐号码 -->
+            <section class="recommendations">
+                <h2>🎯 智能推荐</h2>
+                <div class="recommendation-grid" id="recommendations"></div>
+                <button id="refreshRecommendations" class="btn btn-outline">🔄 刷新推荐</button>
+            </section>
+
+            <!-- 双色球预测板块 -->
+            <section class="ssq-prediction">
+                <h2>🔵 双色球预测系统</h2>
+                <div class="ssq-container">
+                    <!-- 蓝球LSTM预测 -->
+                    <div class="blue-ball-section">
+                        <h3>🔵 蓝球LSTM预测</h3>
+                        <div class="blue-ball-display">
+                            <div class="blue-ball" id="blueBall">0</div>
+                        </div>
+                        <div class="blue-controls">
+                            <button id="predictBlueBtn" class="btn btn-primary">🧠 LSTM预测蓝球</button>
+                            <button id="randomBlueBtn" class="btn btn-secondary">🎲 随机蓝球</button>
+                        </div>
+                        <div class="blue-analysis">
+                            <h4>蓝球分析</h4>
+                            <div class="blue-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">最近30期热号</span>
+                                    <span class="stat-value" id="blueHotNumbers">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">最近30期冷号</span>
+                                    <span class="stat-value" id="blueColdNumbers">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">LSTM预测准确率</span>
+                                    <span class="stat-value" id="blueAccuracy">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 红球号码生成 -->
+                    <div class="red-balls-section">
+                        <h3>🔴 红球号码生成</h3>
+                        <div class="red-balls-display">
+                            <div class="red-ball" id="redBall1">0</div>
+                            <div class="red-ball" id="redBall2">0</div>
+                            <div class="red-ball" id="redBall3">0</div>
+                            <div class="red-ball" id="redBall4">0</div>
+                            <div class="red-ball" id="redBall5">0</div>
+                            <div class="red-ball" id="redBall6">0</div>
+                        </div>
+                        <div class="red-controls">
+                            <button id="generateRedBtn" class="btn btn-success">🎯 生成红球号码</button>
+                            <button id="smartRedBtn" class="btn btn-primary">🧠 智能红球组合</button>
+                        </div>
+                        <div class="red-analysis">
+                            <h4>红球分析</h4>
+                            <div class="red-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">和值范围</span>
+                                    <span class="stat-value" id="redSumRange">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">奇偶比例</span>
+                                    <span class="stat-value" id="redOddEven">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">大小比例</span>
+                                    <span class="stat-value" id="redBigSmall">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 双色球完整号码 -->
+                    <div class="complete-ssq">
+                        <h3>🎯 完整双色球号码</h3>
+                        <div class="complete-display">
+                            <div class="red-group">
+                                <span class="red-ball" id="completeRed1">0</span>
+                                <span class="red-ball" id="completeRed2">0</span>
+                                <span class="red-ball" id="completeRed3">0</span>
+                                <span class="red-ball" id="completeRed4">0</span>
+                                <span class="red-ball" id="completeRed5">0</span>
+                                <span class="red-ball" id="completeRed6">0</span>
+                            </div>
+                            <span class="separator">+</span>
+                            <span class="blue-ball" id="completeBlue">0</span>
+                        </div>
+                        <div class="complete-controls">
+                            <button id="generateCompleteBtn" class="btn btn-primary">🎲 生成完整号码</button>
+                            <button id="saveCompleteBtn" class="btn btn-success">💾 保存号码</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 往期数据查询 -->
+            <section class="history-data">
+                <h2>📊 往期数据查询</h2>
+                <div class="history-tabs">
+                    <button class="tab-btn active" data-tab="fc3d-history">福彩3D历史</button>
+                    <button class="tab-btn" data-tab="ssq-history">双色球历史</button>
+                </div>
+                
+                <!-- 福彩3D历史数据 -->
+                <div class="tab-content active" id="fc3d-history">
+                    <div class="history-controls">
+                        <div class="search-controls">
+                            <input type="number" id="fc3dPeriodSearch" placeholder="输入期号搜索" min="1" max="999">
+                            <button id="searchFc3dBtn" class="btn btn-primary">🔍 搜索</button>
+                            <button id="showAllFc3dBtn" class="btn btn-secondary">📋 显示全部</button>
+                        </div>
+                        <div class="filter-controls">
+                            <select id="fc3dPeriodFilter">
+                                <option value="all">全部期数</option>
+                                <option value="30">最近30期</option>
+                                <option value="50">最近50期</option>
+                                <option value="100">最近100期</option>
+                                <option value="300">最近300期</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="history-table-container">
+                        <table class="history-table" id="fc3dHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>期号</th>
+                                    <th>开奖日期</th>
+                                    <th>开奖号码</th>
+                                    <th>和值</th>
+                                    <th>跨度</th>
+                                    <th>奇偶比</th>
+                                    <th>大小比</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fc3dHistoryBody">
+                                <!-- 数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="history-pagination">
+                        <button id="fc3dPrevPage" class="btn btn-outline">⬅️ 上一页</button>
+                        <span id="fc3dPageInfo">第 1 页，共 1 页</span>
+                        <button id="fc3dNextPage" class="btn btn-outline">下一页 ➡️</button>
+                    </div>
+                </div>
+
+                <!-- 双色球历史数据 -->
+                <div class="tab-content" id="ssq-history">
+                    <div class="history-controls">
+                        <div class="search-controls">
+                            <input type="number" id="ssqPeriodSearch" placeholder="输入期号搜索" min="1" max="999">
+                            <button id="searchSsqBtn" class="btn btn-primary">🔍 搜索</button>
+                            <button id="showAllSsqBtn" class="btn btn-secondary">📋 显示全部</button>
+                        </div>
+                        <div class="filter-controls">
+                            <select id="ssqPeriodFilter">
+                                <option value="all">全部期数</option>
+                                <option value="30">最近30期</option>
+                                <option value="50">最近50期</option>
+                                <option value="100">最近100期</option>
+                                <option value="300">最近300期</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="history-table-container">
+                        <table class="history-table" id="ssqHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>期号</th>
+                                    <th>开奖日期</th>
+                                    <th>红球号码</th>
+                                    <th>蓝球</th>
+                                    <th>红球和值</th>
+                                    <th>奇偶比</th>
+                                    <th>大小比</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ssqHistoryBody">
+                                <!-- 数据将通过JavaScript动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="history-pagination">
+                        <button id="ssqPrevPage" class="btn btn-outline">⬅️ 上一页</button>
+                        <span id="ssqPageInfo">第 1 页，共 1 页</span>
+                        <button id="ssqNextPage" class="btn btn-outline">下一页 ➡️</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 我的选号记录 -->
+            <section class="my-picks">
+                <h2>📝 我的选号记录</h2>
+                <div class="picks-list" id="picksList">
+                    <p class="empty-message">暂无选号记录</p>
+                </div>
+                <button id="clearPicks" class="btn btn-danger">🗑️ 清空记录</button>
+            </section>
+        </main>
+
+        <footer>
+            <p>⚠️ 温馨提示：彩票具有随机性，本系统仅供参考，请理性购彩</p>
+            <p>© 2024 福彩3D预选系统</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
