@@ -668,6 +668,18 @@ section {
     font-weight: 600;
 }
 
+.network-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #555;
+}
+
+.network-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
 .history-tabs {
     display: flex;
     gap: 10px;

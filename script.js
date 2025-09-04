@@ -6,6 +6,12 @@ class LotterySystem {
         this.myPicks = JSON.parse(localStorage.getItem('myPicks')) || [];
         this.ssqPicks = JSON.parse(localStorage.getItem('ssqPicks')) || [];
         this.lstmModel = null;
+        // iOS安全模式：默认禁用联网更新（可由用户开关启用）
+        this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        this.enableNetwork = JSON.parse(localStorage.getItem('enableNetwork'));
+        if (this.enableNetwork === null || this.enableNetwork === undefined) {
+            this.enableNetwork = !this.isIOS; // iOS默认false，其他平台默认true
+        }
         this.init();
     }
 
@@ -17,6 +23,22 @@ class LotterySystem {
         this.generateRecommendations();
         this.initSSQSystem();
         this.initHistoryData();
+        // 初始化网络开关UI
+        const toggle = document.getElementById('enableNetworkToggle');
+        if (toggle) {
+            toggle.checked = !!this.enableNetwork;
+            toggle.addEventListener('change', () => {
+                this.enableNetwork = toggle.checked;
+                localStorage.setItem('enableNetwork', JSON.stringify(this.enableNetwork));
+                if (this.enableNetwork) {
+                    this.loadRealData().then(() => {
+                        this.updateAnalysis();
+                        this.displayFc3dHistory();
+                        this.displaySsqHistory();
+                    });
+                }
+            });
+        }
     }
 
     // 生成模拟历史数据
@@ -115,8 +137,8 @@ class LotterySystem {
             this.confirmManualPick();
         });
 
-        // 分析标签页
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        // 分析标签页（仅限分析区域内的tab）
+        document.querySelectorAll('.analysis .tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 this.switchTab(e.target.dataset.tab);
             });
@@ -279,24 +301,47 @@ class LotterySystem {
         this.displayMyPicks();
     }
 
-    // 显示我的选号记录
+    // 显示我的选号记录（包含福彩3D与双色球）
     displayMyPicks() {
         const picksList = document.getElementById('picksList');
-        
-        if (this.myPicks.length === 0) {
+        if (!picksList) return;
+
+        const has3D = this.myPicks && this.myPicks.length > 0;
+        const hasSSQ = this.ssqPicks && this.ssqPicks.length > 0;
+
+        if (!has3D && !hasSSQ) {
             picksList.innerHTML = '<p class="empty-message">暂无选号记录</p>';
             return;
         }
-        
-        picksList.innerHTML = this.myPicks.map(pick => `
-            <div class="pick-item">
-                <div>
-                    <div class="pick-number">${pick.number}</div>
-                    <div class="pick-method">${pick.method}</div>
+
+        // 将两类记录合并展示（3D在前，随后展示双色球）
+        let html = '';
+
+        if (has3D) {
+            html += this.myPicks.map(pick => `
+                <div class="pick-item">
+                    <div>
+                        <div class="pick-number">${pick.number}</div>
+                        <div class="pick-method">${pick.method} · 福彩3D</div>
+                    </div>
+                    <div class="pick-time">${pick.time}</div>
                 </div>
-                <div class="pick-time">${pick.time}</div>
-            </div>
-        `).join('');
+            `).join('');
+        }
+
+        if (hasSSQ) {
+            html += this.ssqPicks.map(pick => `
+                <div class="pick-item">
+                    <div>
+                        <div class="pick-number">${pick.redBalls.join(', ')} + ${pick.blueBall}</div>
+                        <div class="pick-method">${pick.method} · 双色球</div>
+                    </div>
+                    <div class="pick-time">${pick.time}</div>
+                </div>
+            `).join('');
+        }
+
+        picksList.innerHTML = html;
     }
 
     // 清空选号记录
@@ -310,15 +355,17 @@ class LotterySystem {
 
     // 切换分析标签页
     switchTab(tabName) {
-        // 移除所有活动状态
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        // 仅作用于分析区域
+        const analysisSection = document.querySelector('.analysis');
+        if (!analysisSection) return;
+        analysisSection.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        analysisSection.querySelectorAll('#hot-cold, #trend, #pattern').forEach(content => content.classList.remove('active'));
         
-        // 激活选中的标签页
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        document.getElementById(tabName).classList.add('active');
+        const targetBtn = analysisSection.querySelector(`[data-tab="${tabName}"]`);
+        if (targetBtn) targetBtn.classList.add('active');
+        const targetContent = analysisSection.querySelector(`#${tabName}`);
+        if (targetContent) targetContent.classList.add('active');
         
-        // 如果是走势分析标签页，绘制图表
         if (tabName === 'trend') {
             this.drawTrendChart();
         }
@@ -910,10 +957,37 @@ class LotterySystem {
         });
     }
 
+    // 数据更新按钮与显示
+    setupDataUpdateListeners() {
+        const updateBtn = document.getElementById('updateDataBtn');
+        const updateTimeElement = document.getElementById('lastUpdateTime');
+        
+        if (updateTimeElement) {
+            const cachedTime = localStorage.getItem('lastDataUpdate');
+            if (cachedTime) {
+                updateTimeElement.textContent = new Date(cachedTime).toLocaleString('zh-CN');
+            }
+        }
+        
+        if (updateBtn) {
+            updateBtn.addEventListener('click', async () => {
+                await this.loadRealData();
+                this.updateAnalysis();
+                this.displayFc3dHistory();
+                this.displaySsqHistory();
+            });
+        }
+    }
+
     // ==================== 真实数据获取方法 ====================
 
     // 加载真实数据
     async loadRealData() {
+        if (!this.enableNetwork) {
+            console.log('已禁用联网更新（安全模式）');
+            this.loadDataFromCache();
+            return;
+        }
         try {
             // 检查是否需要更新数据
             if (this.shouldUpdateData()) {
