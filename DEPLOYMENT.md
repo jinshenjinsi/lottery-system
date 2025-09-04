@@ -60,7 +60,7 @@ git push -u origin main
 3. 等待部署完成（通常需要1-3分钟）
 4. 部署成功后，您会看到：
    - 绿色状态指示器
-   - 网站URL，例如：`https://lottery-prediction-system.onrender.com`
+   - 网站URL，例如：`https://lottery-system-yk9l.onrender.com`
 
 #### 3.5 验证部署
 1. 点击提供的URL访问您的网站
