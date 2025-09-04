@@ -646,6 +646,28 @@ section {
     text-align: center;
 }
 
+.data-update-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #e8f2ff 100%);
+    border-radius: 10px;
+    border: 1px solid #e0e8ff;
+}
+
+.update-info {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.update-info span {
+    color: #667eea;
+    font-weight: 600;
+}
+
 .history-tabs {
     display: flex;
     gap: 10px;
@@ -916,5 +938,15 @@ section {
     .history-pagination button {
         width: 100%;
         padding: 10px;
+    }
+    
+    .data-update-controls {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .update-info {
+        font-size: 0.8rem;
     }
 }
