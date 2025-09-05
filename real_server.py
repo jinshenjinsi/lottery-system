@@ -91,7 +91,7 @@ class RealLotteryDataScraper:
             return []
     
     def _update_latest_ssq_date(self, data):
-        """更新双色球最新开奖日期"""
+        """更新双色球下一期开奖日期"""
         if not data:
             return data
         
@@ -101,42 +101,42 @@ class RealLotteryDataScraper:
             today = datetime.now()
             
             # 双色球开奖时间：周二、四、日 21:15
-            # 计算最近一次开奖日期
+            # 计算下一期开奖日期
             days_since_monday = today.weekday()  # 0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
             
             if days_since_monday == 0:  # 周一
-                last_draw = today - timedelta(days=3)  # 上周日
+                next_draw = today + timedelta(days=1)  # 明天周二
             elif days_since_monday == 1:  # 周二
-                last_draw = today - timedelta(days=4)  # 上周日
+                next_draw = today + timedelta(days=2)  # 后天周四
             elif days_since_monday == 2:  # 周三
-                last_draw = today - timedelta(days=1)  # 昨天周二
+                next_draw = today + timedelta(days=1)  # 明天周四
             elif days_since_monday == 3:  # 周四
-                last_draw = today - timedelta(days=2)  # 前天周二
+                next_draw = today + timedelta(days=3)  # 后天周日
             elif days_since_monday == 4:  # 周五
-                last_draw = today - timedelta(days=1)  # 昨天周四
+                next_draw = today + timedelta(days=2)  # 后天周日
             elif days_since_monday == 5:  # 周六
-                last_draw = today - timedelta(days=2)  # 前天周四
+                next_draw = today + timedelta(days=1)  # 明天周日
             else:  # 周日
-                last_draw = today - timedelta(days=3)  # 前天周四
+                next_draw = today + timedelta(days=2)  # 后天周二
             
-            # 更新第一条数据的日期
+            # 更新第一条数据的日期为下一期开奖日期
             if data and len(data) > 0:
                 # 格式化日期
                 weekday_names = ['一', '二', '三', '四', '五', '六', '日']
-                weekday = weekday_names[last_draw.weekday()]
-                new_date = f"{last_draw.strftime('%Y-%m-%d')}({weekday})"
+                weekday = weekday_names[next_draw.weekday()]
+                next_date = f"{next_draw.strftime('%Y-%m-%d')}({weekday})"
                 
                 # 更新期号（假设是连续递增的）
                 if 'period' in data[0]:
                     try:
                         current_period = int(data[0]['period'])
-                        new_period = str(current_period + 1)
-                        data[0]['period'] = new_period
+                        next_period = str(current_period + 1)
+                        data[0]['period'] = next_period
                     except:
                         pass
                 
-                data[0]['date'] = new_date
-                logger.info(f"更新双色球最新开奖日期为: {new_date}")
+                data[0]['date'] = next_date
+                logger.info(f"更新双色球下一期开奖日期为: {next_date}")
             
             return data
             
