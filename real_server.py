@@ -51,6 +51,8 @@ class RealLotteryDataScraper:
             # 福彩3D数据源暂时不可用，使用智能生成数据
             logger.info("福彩3D数据源不可用，使用智能生成数据")
             data = self._generate_realistic_fc3d_data(limit)
+            # 更新下一期开奖日期
+            data = self._update_latest_fc3d_date(data)
             self._cache_data(cache_key, data)
             return data
             
@@ -142,6 +144,48 @@ class RealLotteryDataScraper:
             
         except Exception as e:
             logger.error(f"更新双色球开奖日期失败: {e}")
+            return data
+    
+    def _update_latest_fc3d_date(self, data):
+        """更新福彩3D下一期开奖日期"""
+        if not data:
+            return data
+        
+        try:
+            # 获取当前日期和时间
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            # 福彩3D开奖时间：每天21:15
+            # 以21:15为界，过了21:15就显示第二天的日期
+            if now.hour >= 21 and now.minute >= 15:
+                # 已经过了21:15，下一期是明天
+                next_draw = now + timedelta(days=1)
+            else:
+                # 还没到21:15，下一期是今天
+                next_draw = now
+            
+            # 更新第一条数据的日期为下一期开奖日期
+            if data and len(data) > 0:
+                # 格式化日期
+                next_date = next_draw.strftime('%Y-%m-%d')
+                
+                # 更新期号（假设是连续递增的）
+                if 'period' in data[0]:
+                    try:
+                        current_period = int(data[0]['period'])
+                        next_period = str(current_period + 1)
+                        data[0]['period'] = next_period
+                    except:
+                        pass
+                
+                data[0]['date'] = next_date
+                logger.info(f"更新福彩3D下一期开奖日期为: {next_date} (当前时间: {now.strftime('%H:%M')})")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"更新福彩3D开奖日期失败: {e}")
             return data
     
     def _scrape_fc3d_from_500_new(self):
