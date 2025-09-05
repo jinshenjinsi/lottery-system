@@ -77,6 +77,8 @@ class RealLotteryDataScraper:
             for i, data in enumerate(data_sources):
                 if data and len(data) > 0:
                     logger.info(f"成功从数据源{i+1}获取双色球数据，共{len(data)}期")
+                    # 更新最新开奖日期
+                    data = self._update_latest_ssq_date(data)
                     self._cache_data(cache_key, data)
                     return data[:limit]
             
@@ -87,6 +89,60 @@ class RealLotteryDataScraper:
         except Exception as e:
             logger.error(f"获取双色球数据失败: {e}")
             return []
+    
+    def _update_latest_ssq_date(self, data):
+        """更新双色球最新开奖日期"""
+        if not data:
+            return data
+        
+        try:
+            # 获取当前日期
+            from datetime import datetime, timedelta
+            today = datetime.now()
+            
+            # 双色球开奖时间：周二、四、日 21:15
+            # 计算最近一次开奖日期
+            days_since_monday = today.weekday()  # 0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
+            
+            if days_since_monday == 0:  # 周一
+                last_draw = today - timedelta(days=3)  # 上周日
+            elif days_since_monday == 1:  # 周二
+                last_draw = today - timedelta(days=4)  # 上周日
+            elif days_since_monday == 2:  # 周三
+                last_draw = today - timedelta(days=1)  # 昨天周二
+            elif days_since_monday == 3:  # 周四
+                last_draw = today - timedelta(days=2)  # 前天周二
+            elif days_since_monday == 4:  # 周五
+                last_draw = today - timedelta(days=1)  # 昨天周四
+            elif days_since_monday == 5:  # 周六
+                last_draw = today - timedelta(days=2)  # 前天周四
+            else:  # 周日
+                last_draw = today - timedelta(days=3)  # 前天周四
+            
+            # 更新第一条数据的日期
+            if data and len(data) > 0:
+                # 格式化日期
+                weekday_names = ['一', '二', '三', '四', '五', '六', '日']
+                weekday = weekday_names[last_draw.weekday()]
+                new_date = f"{last_draw.strftime('%Y-%m-%d')}({weekday})"
+                
+                # 更新期号（假设是连续递增的）
+                if 'period' in data[0]:
+                    try:
+                        current_period = int(data[0]['period'])
+                        new_period = str(current_period + 1)
+                        data[0]['period'] = new_period
+                    except:
+                        pass
+                
+                data[0]['date'] = new_date
+                logger.info(f"更新双色球最新开奖日期为: {new_date}")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"更新双色球开奖日期失败: {e}")
+            return data
     
     def _scrape_fc3d_from_500_new(self):
         """从500.com获取福彩3D数据（新版本）"""
