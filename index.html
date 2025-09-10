@@ -329,6 +329,18 @@
         </footer>
     </div>
 
-    <script src="script.js"></script>
+    <!-- 加版本参数强制浏览器拉取最新脚本，避免缓存 -->
+    <script src="script.js?v=__BUILD_20250910_01__"></script>
+    <script>
+      // 显示版本条，便于确认是否加载了最新构建
+      (function(){
+        try{
+          const bar=document.createElement('div');
+          bar.style.position='fixed';bar.style.left='8px';bar.style.bottom='8px';bar.style.background='rgba(0,0,0,.6)';bar.style.color='#fff';bar.style.padding='4px 8px';bar.style.borderRadius='6px';bar.style.fontSize='12px';bar.style.zIndex='9999';
+          bar.textContent='Frontend Build: __BUILD_20250910_01__';
+          document.body.appendChild(bar);
+        }catch(e){}
+      })();
+    </script>
 </body>
 </html>
