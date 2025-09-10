@@ -1,8 +1,9 @@
 // 福彩3D预选系统 JavaScript
 class LotterySystem {
     constructor() {
-        this.historyData = this.generateMockHistoryData();
-        this.ssqHistoryData = this.generateSSQHistoryData();
+        // 仅使用真实数据来源
+        this.historyData = [];
+        this.ssqHistoryData = [];
         this.myPicks = JSON.parse(localStorage.getItem('myPicks')) || [];
         this.ssqPicks = JSON.parse(localStorage.getItem('ssqPicks')) || [];
         this.lstmModel = null;
@@ -12,8 +13,30 @@ class LotterySystem {
         if (this.enableNetwork === null || this.enableNetwork === undefined) {
             this.enableNetwork = !this.isIOS; // iOS默认false，其他平台默认true
         }
-        this.dataSource = '本地缓存'; // 默认数据来源
+        this.dataSource = '等待数据';
+        this.apiBaseUrl = this.getApiBaseUrl();
         this.init();
+    }
+
+    // 获取后端API基础URL（Render/本地/局域网）
+    getApiBaseUrl() {
+        try {
+            const host = window.location.host || '';
+            const hostname = window.location.hostname || '';
+            // Render 前端域名：固定走 Render 后端
+            if (host.includes('onrender.com')) {
+                return 'https://lottery-system88.onrender.com';
+            }
+            // 本机
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'http://localhost:5060';
+            }
+            // 同局域网访问
+            return `http://${hostname}:5060`;
+        } catch (e) {
+            console.log('获取API地址失败:', e);
+            return null;
+        }
     }
 
     init() {
@@ -1148,19 +1171,17 @@ class LotterySystem {
                 this.loadDataFromCache();
             }
         } catch (error) {
-            console.log('获取真实数据失败，使用模拟数据:', error);
-            // 使用模拟数据作为备选
-            this.dataSource = '模拟数据（API失败）';
-            this.historyData = this.generateMockHistoryData();
-            this.ssqHistoryData = this.generateSSQHistoryData();
+            console.log('获取真实数据失败:', error);
+            this.dataSource = '数据获取失败';
         }
     }
 
     // 获取福彩3D真实数据
     async fetchFc3dData() {
         try {
-            // 调用本地代理服务器获取真实数据
-            const response = await fetch('http://localhost:5000/api/fc3d?limit=300', {
+            const base = this.apiBaseUrl;
+            if (!base) return null;
+            const response = await fetch(`${base}/api/fc3d?limit=300`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -1177,25 +1198,20 @@ class LotterySystem {
                     return this.formatFc3dData(result.data);
                 }
             }
-            
-            // 如果API失败，使用智能生成数据
-            console.log('API获取失败，使用智能生成数据');
-            this.dataSource = '智能生成数据（API受限）';
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return this.generateRealisticFc3dData();
+            return null;
             
         } catch (error) {
             console.log('福彩3D数据获取失败:', error);
-            this.dataSource = '智能生成数据（网络错误）';
-            return this.generateEnhancedMockFc3dData();
+            return null;
         }
     }
 
     // 获取双色球真实数据
     async fetchSsqData() {
         try {
-            // 调用本地代理服务器获取真实数据
-            const response = await fetch('http://localhost:5000/api/ssq?limit=300', {
+            const base = this.apiBaseUrl;
+            if (!base) return null;
+            const response = await fetch(`${base}/api/ssq?limit=300`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -1212,17 +1228,11 @@ class LotterySystem {
                     return this.formatSsqData(result.data);
                 }
             }
-            
-            // 如果API失败，使用智能生成数据
-            console.log('API获取失败，使用智能生成数据');
-            this.dataSource = '智能生成数据（API受限）';
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return this.generateRealisticSsqData();
+            return null;
             
         } catch (error) {
             console.log('双色球数据获取失败:', error);
-            this.dataSource = '智能生成数据（网络错误）';
-            return this.generateEnhancedMockSsqData();
+            return null;
         }
     }
 
