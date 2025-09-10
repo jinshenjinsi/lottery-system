@@ -1618,6 +1618,12 @@ class LotterySystem {
     // 从缓存加载数据
     loadDataFromCache() {
         try {
+            if (this.isRender) {
+                console.log('skip cache(render loadDataFromCache)');
+                this.historyData = [];
+                this.ssqHistoryData = [];
+                return;
+            }
             const fc3dData = localStorage.getItem('fc3d_data');
             const ssqData = localStorage.getItem('ssq_data');
             
