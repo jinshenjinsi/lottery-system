@@ -108,8 +108,7 @@ class RealLotteryDataScraper:
             for i, data in enumerate(data_sources):
                 if data and len(data) > 0:
                     logger.info(f"成功从数据源{i+1}获取双色球数据，共{len(data)}期")
-                    # 更新最新开奖日期
-                    data = self._update_latest_ssq_date(data)
+                    # 不再修改首条记录日期，避免出现“未来开奖作为已开奖”
                     self._cache_data(cache_key, data)
                     return data[:limit]
             

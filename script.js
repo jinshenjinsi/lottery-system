@@ -919,7 +919,8 @@ class LotterySystem {
         const fc3dEl = document.getElementById('fc3dLatestDate');
         const ssqEl = document.getElementById('ssqLatestDate');
         const fc3dDate = this.historyData && this.historyData.length > 0 ? this.computeNextFc3dDateFromData(this.historyData) : this.computeNextFc3dDate();
-        const ssqDate = this.ssqHistoryData && this.ssqHistoryData.length > 0 ? this.computeNextSsqDateFromData(this.ssqHistoryData) : this.computeNextSsqDate();
+        // 仅展示“下一期日期”推算，不改写历史数据日期
+        const ssqDate = this.computeNextSsqDate();
         if (fc3dEl) fc3dEl.textContent = fc3dDate ? `（下一期：${fc3dDate}）` : '';
         if (ssqEl) ssqEl.textContent = ssqDate ? `（下一期：${ssqDate}）` : '';
     }
