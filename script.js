@@ -18,6 +18,11 @@ class LotterySystem {
         if (this.isRender) {
             this.enableNetwork = true;
             localStorage.setItem('enableNetwork','true');
+            // 在构造阶段即跳过缓存并强制需要更新，防止任何早期流程读取缓存
+            try {
+                this.shouldUpdateData = function(){ return true; };
+                this.loadDataFromCache = function(){ this.historyData=[]; this.ssqHistoryData=[]; console.log('skip cache(render ctor)'); };
+            } catch(_){}
         }
         this.dataSource = '等待数据';
         this.apiBaseUrl = this.getApiBaseUrl();
@@ -1078,11 +1083,9 @@ class LotterySystem {
         this.fc3dItemsPerPage = 20;
         this.ssqItemsPerPage = 20;
         
-        // Render 环境：跳过缓存，强制拉取真实数据
+        // Render 环境：跳过缓存，强制拉取真实数据（再次确保）
         if (this.isRender) {
-            try {
-                this.loadDataFromCache = function(){ this.historyData=[]; this.ssqHistoryData=[]; console.log('skip cache(render)'); };
-            } catch(_){}
+            try { this.loadDataFromCache = function(){ this.historyData=[]; this.ssqHistoryData=[]; console.log('skip cache(render init)'); }; } catch(_){}
         }
         await this.loadRealData();
         
