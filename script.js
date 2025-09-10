@@ -1349,9 +1349,9 @@ class LotterySystem {
         }).filter(item => item !== null);
     }
 
-    // 格式化双色球数据
+    // 格式化双色球数据（兼容字符串/数组红球）
     formatSsqData(rawData) {
-        return rawData.map(item => {
+        const formatted = rawData.map(item => {
             // 处理不同的数据格式
             let redBalls = [];
             let blueBall = 0;
@@ -1360,13 +1360,17 @@ class LotterySystem {
             
             // 处理红球数据
             if (item.redBalls) {
-                redBalls = Array.isArray(item.redBalls) ? item.redBalls : item.redBalls.split(',').map(Number);
+                if (Array.isArray(item.redBalls)) {
+                    redBalls = item.redBalls.map(n => parseInt(n, 10)).filter(n => !isNaN(n));
+                } else if (typeof item.redBalls === 'string') {
+                    redBalls = item.redBalls.split(',').map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+                }
             } else if (item.red) {
-                redBalls = item.red.split(',').map(Number);
+                redBalls = String(item.red).split(',').map(s => parseInt(s, 10)).filter(n => !isNaN(n));
             }
             
             // 处理蓝球数据
-            blueBall = parseInt(item.blueBall || item.blue || 0);
+            blueBall = parseInt(item.blueBall || item.blue || 0, 10);
             
             // 验证数据有效性
             if (redBalls.length !== 6 || blueBall < 1 || blueBall > 16) {
@@ -1382,10 +1386,10 @@ class LotterySystem {
             }
             
             return {
-                period: period,
-                date: date,
-                redBalls: redBalls.sort((a, b) => a - b),
-                blueBall: blueBall,
+                period,
+                date,
+                redBalls: redBalls.sort((a, b) => a - b).map(n => String(n).padStart(2, '0')),
+                blueBall: String(blueBall).padStart(2, '0'),
                 redSum: redBalls.reduce((a, b) => a + b, 0),
                 redOddCount: redBalls.filter(n => n % 2 === 1).length,
                 redEvenCount: redBalls.filter(n => n % 2 === 0).length,
@@ -1393,6 +1397,9 @@ class LotterySystem {
                 redSmallCount: redBalls.filter(n => n <= 16).length
             };
         }).filter(item => item !== null);
+
+        if (formatted.length > 0) this.dataSource = '真实API数据';
+        return formatted;
     }
 
     // 生成基于真实格式的福彩3D数据
