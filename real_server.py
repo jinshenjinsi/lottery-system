@@ -5,7 +5,7 @@
 从多个官方数据源获取真实的福彩3D和双色球开奖数据
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
@@ -22,7 +22,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+# 允许 /api/* 跨域，确保在错误响应也返回 CORS 头
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+@app.after_request
+def add_cors_headers(resp):
+    try:
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    except Exception:
+        pass
+    return resp
+
+@app.route('/api/<path:subpath>', methods=['OPTIONS'])
+def api_cors_preflight(subpath):
+    resp = make_response('', 200)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return resp
 
 class RealLotteryDataScraper:
     def __init__(self):
@@ -48,13 +67,23 @@ class RealLotteryDataScraper:
             return self.cache[cache_key]['data']
         
         try:
-            # 福彩3D数据源暂时不可用，使用智能生成数据
-            logger.info("福彩3D数据源不可用，使用智能生成数据")
-            data = self._generate_realistic_fc3d_data(limit)
-            # 更新下一期开奖日期
-            data = self._update_latest_fc3d_date(data)
-            self._cache_data(cache_key, data)
-            return data
+            # 尝试多个真实数据源（无模拟数据回退）
+            data_sources = [
+                self._scrape_fc3d_from_500_new(),
+                self._scrape_fc3d_from_cwl_new(),
+                self._scrape_fc3d_from_sina_new(),
+                self._scrape_fc3d_from_163()
+            ]
+            
+            for i, data in enumerate(data_sources):
+                if data and len(data) > 0:
+                    logger.info(f"成功从数据源{i+1}获取福彩3D数据，共{len(data)}期")
+                    self._cache_data(cache_key, data)
+                    return data[:limit]
+            
+            # 所有源失败，返回空
+            logger.warning("所有福彩3D数据源都失败")
+            return []
             
         except Exception as e:
             logger.error(f"获取福彩3D数据失败: {e}")
@@ -250,7 +279,7 @@ class RealLotteryDataScraper:
         """从中国福彩网获取福彩3D数据（新版本）"""
         try:
             # 使用新的API接口
-            url = "http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
+            url = "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
             params = {
                 'name': 'fc3d',
                 'issueCount': '300',
@@ -283,7 +312,7 @@ class RealLotteryDataScraper:
         """从中国福彩网获取双色球数据（新版本）"""
         try:
             # 使用新的API接口
-            url = "http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
+            url = "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
             params = {
                 'name': 'ssq',
                 'issueCount': '300',
@@ -625,12 +654,19 @@ def clear_cache():
     })
 
 if __name__ == '__main__':
+    import os
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', 5000)))
+    args = parser.parse_args()
+    port = args.port
+
     print("🚀 启动真实彩票数据服务器...")
     print("📊 支持从多个官方数据源获取真实开奖数据")
     print("🌐 API地址:")
-    print("   - 福彩3D: http://localhost:5000/api/fc3d")
-    print("   - 双色球: http://localhost:5000/api/ssq")
-    print("   - 健康检查: http://localhost:5000/api/health")
-    print("   - 清除缓存: http://localhost:5000/api/clear_cache")
+    print(f"   - 福彩3D: http://localhost:{port}/api/fc3d")
+    print(f"   - 双色球: http://localhost:{port}/api/ssq")
+    print(f"   - 健康检查: http://localhost:{port}/api/health")
+    print(f"   - 清除缓存: http://localhost:{port}/api/clear_cache")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)
