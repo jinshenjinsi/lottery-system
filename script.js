@@ -13,6 +13,12 @@ class LotterySystem {
         if (this.enableNetwork === null || this.enableNetwork === undefined) {
             this.enableNetwork = !this.isIOS; // iOS默认false，其他平台默认true
         }
+        // Render 环境：默认启用联网并跳过缓存
+        this.isRender = (typeof window !== 'undefined') && (window.location.host || '').includes('onrender.com');
+        if (this.isRender) {
+            this.enableNetwork = true;
+            localStorage.setItem('enableNetwork','true');
+        }
         this.dataSource = '等待数据';
         this.apiBaseUrl = this.getApiBaseUrl();
         this.init();
@@ -1072,7 +1078,12 @@ class LotterySystem {
         this.fc3dItemsPerPage = 20;
         this.ssqItemsPerPage = 20;
         
-        // 尝试获取真实数据
+        // Render 环境：跳过缓存，强制拉取真实数据
+        if (this.isRender) {
+            try {
+                this.loadDataFromCache = function(){ this.historyData=[]; this.ssqHistoryData=[]; console.log('skip cache(render)'); };
+            } catch(_){}
+        }
         await this.loadRealData();
         
         this.fc3dFilteredData = this.historyData;
@@ -1080,6 +1091,10 @@ class LotterySystem {
         
         this.displayFc3dHistory();
         this.displaySsqHistory();
+        // Render 环境：立即刷新双色球分析
+        if (this.isRender) {
+            try { this.updateBlueAnalysis(); this.updateRedAnalysis(); } catch(_){}
+        }
     }
 
     // 设置往期数据事件监听器
