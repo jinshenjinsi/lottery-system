@@ -42,9 +42,8 @@ class LotterySystem {
     init() {
         this.setupEventListeners();
         this.populateSelectOptions();
-        this.updateAnalysis();
+        // 隐藏了福彩3D分析与智能推荐，不再计算
         this.displayMyPicks();
-        this.generateRecommendations();
         this.initSSQSystem();
         this.initHistoryData().then(() => {
             this.updateLatestDates();
