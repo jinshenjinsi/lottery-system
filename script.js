@@ -904,17 +904,98 @@ class LotterySystem {
         this.updateRedAnalysis();
     }
 
-    // 更新标题旁的最近开奖日期（取historyData与ssqHistoryData第一条）
+    // 更新标题旁的下一期开奖日期（无数据也能计算）
     updateLatestDates() {
-        const fc3dDate = this.historyData && this.historyData.length > 0 ? this.historyData[0].date : '-';
-        const ssqDate = this.ssqHistoryData && this.ssqHistoryData.length > 0 ? this.ssqHistoryData[0].date : '-';
         const fc3dEl = document.getElementById('fc3dLatestDate');
         const ssqEl = document.getElementById('ssqLatestDate');
-        if (fc3dEl) {
-            fc3dEl.textContent = fc3dDate !== '-' ? `（最近开奖：${fc3dDate}）` : '';
+        const fc3dDate = this.historyData && this.historyData.length > 0 ? this.computeNextFc3dDateFromData(this.historyData) : this.computeNextFc3dDate();
+        const ssqDate = this.ssqHistoryData && this.ssqHistoryData.length > 0 ? this.computeNextSsqDateFromData(this.ssqHistoryData) : this.computeNextSsqDate();
+        if (fc3dEl) fc3dEl.textContent = fc3dDate ? `（下一期：${fc3dDate}）` : '';
+        if (ssqEl) ssqEl.textContent = ssqDate ? `（下一期：${ssqDate}）` : '';
+    }
+
+    computeNextFc3dDate() {
+        const now = new Date();
+        // 每天21:15开奖，过了21:15则次日
+        const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
+        if (after) now.setDate(now.getDate() + 1);
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    computeNextFc3dDateFromData(data) {
+        // 以最新一期的日期为基准再按规则计算
+        try {
+            const latest = data[0];
+            const base = new Date(latest.date);
+            const now = new Date();
+            // 若今日已过开奖时间，则返回明天，否则今天
+            const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
+            if (after) base.setDate(base.getDate() + 1);
+            const y = base.getFullYear();
+            const m = String(base.getMonth() + 1).padStart(2, '0');
+            const d = String(base.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        } catch {
+            return this.computeNextFc3dDate();
         }
-        if (ssqEl) {
-            ssqEl.textContent = ssqDate !== '-' ? `（最近开奖：${ssqDate}）` : '';
+    }
+
+    computeNextSsqDate() {
+        const now = new Date();
+        // 双色球：周二(2)、周四(4)、周日(0)的21:15
+        const drawDays = new Set([0, 2, 4]);
+        const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
+        let day = now.getDay();
+        let add = 0;
+        const nextDrawIn = (fromDay) => {
+            for (let i = 0; i <= 7; i++) {
+                const d = (fromDay + i) % 7;
+                if (drawDays.has(d)) return i;
+            }
+            return 2;
+        };
+        if (drawDays.has(day)) {
+            add = after ? nextDrawIn((day + 1) % 7) + 1 : 0;
+        } else {
+            add = nextDrawIn(day);
+        }
+        const dt = new Date(now);
+        dt.setDate(dt.getDate() + add);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    computeNextSsqDateFromData(data) {
+        try {
+            // data[0].date 可能含（周几）括号，先取日期部分
+            const latest = data[0];
+            const dateStr = String(latest.date).split('(')[0];
+            const base = new Date(dateStr);
+            const now = new Date();
+            const drawDays = new Set([0, 2, 4]);
+            const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
+            let day = base.getDay();
+            let add;
+            const next = (from) => {
+                for (let i = 1; i <= 7; i++) {
+                    const d = (from + i) % 7;
+                    if (drawDays.has(d)) return i;
+                }
+                return 2;
+            };
+            add = after ? next(day) : 0;
+            base.setDate(base.getDate() + add);
+            const y = base.getFullYear();
+            const m = String(base.getMonth() + 1).padStart(2, '0');
+            const d = String(base.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        } catch {
+            return this.computeNextSsqDate();
         }
     }
 
