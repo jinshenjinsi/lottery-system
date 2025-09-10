@@ -1777,6 +1777,36 @@ class LotterySystem {
 
 // 初始化系统
 const lotterySystem = new LotterySystem();
+// 暴露到全局便于诊断
+window.lotterySystem = lotterySystem;
+
+// 强制启用联网（避免本地设置干扰）
+try {
+    lotterySystem.enableNetwork = true;
+    localStorage.setItem('enableNetwork', 'true');
+} catch (_) {}
+
+// 简易调试条：显示API地址与数据源状态
+(function(){
+    try {
+        const bar = document.createElement('div');
+        bar.style.position = 'fixed';
+        bar.style.right = '8px';
+        bar.style.bottom = '8px';
+        bar.style.zIndex = '9999';
+        bar.style.padding = '6px 10px';
+        bar.style.borderRadius = '6px';
+        bar.style.background = 'rgba(0,0,0,.6)';
+        bar.style.color = '#fff';
+        bar.style.fontSize = '12px';
+        const update = () => {
+            bar.textContent = `API: ${lotterySystem.apiBaseUrl || '-'} | 源: ${lotterySystem.dataSource || '-'}`;
+        };
+        update();
+        setInterval(update, 2000);
+        document.body && document.body.appendChild(bar);
+    } catch(_) {}
+})();
 
 // 添加一些实用函数
 function copyToClipboard(text) {
