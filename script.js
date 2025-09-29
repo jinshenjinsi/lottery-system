@@ -40,10 +40,10 @@ class LotterySystem {
             }
             // 本机
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                return 'http://localhost:5060';
+                return 'http://localhost:5050';
             }
-            // 同局域网访问
-            return `http://${hostname}:5060`;
+            // 同局域网访问（避免浏览器拦截 5060）
+            return `http://${hostname}:5050`;
         } catch (e) {
             console.log('获取API地址失败:', e);
             return null;
@@ -60,6 +60,8 @@ class LotterySystem {
             this.updateLatestDates();
             this.updateDataSourceDisplay();
         });
+        // 扫码验奖事件
+        this.setupScanValidate();
         // 初始化网络开关UI
         const toggle = document.getElementById('enableNetworkToggle');
         if (toggle) {
@@ -171,10 +173,13 @@ class LotterySystem {
             this.generateAnalyzedNumber();
         });
 
-        // 手动选号
-        document.getElementById('confirmBtn').addEventListener('click', () => {
-            this.confirmManualPick();
-        });
+        // 手动选号已移除（保持兼容，若存在则绑定）
+        const manualConfirmBtn = document.getElementById('confirmBtn');
+        if (manualConfirmBtn) {
+            manualConfirmBtn.addEventListener('click', () => {
+                this.confirmManualPick();
+            });
+        }
 
         // 分析标签页（仅限分析区域内的tab）
         document.querySelectorAll('.analysis .tab-btn').forEach(btn => {
@@ -223,28 +228,140 @@ class LotterySystem {
             this.generateSmartRedBalls();
         });
 
-        // 完整双色球
-        document.getElementById('generateCompleteBtn').addEventListener('click', () => {
-            this.generateCompleteSSQ();
-        });
+        // 生成完整号码按钮已移除（若存在则兼容绑定）
+        const generateCompleteBtn = document.getElementById('generateCompleteBtn');
+        if (generateCompleteBtn) {
+            generateCompleteBtn.addEventListener('click', () => {
+                this.generateCompleteSSQ();
+            });
+        }
 
         document.getElementById('saveCompleteBtn').addEventListener('click', () => {
             this.saveCompleteSSQ();
         });
     }
 
+    // 扫码验奖：初始化事件
+    setupScanValidate() {
+        try {
+            const typeSelect = document.getElementById('scanLotteryType');
+            const ocrBtn = document.getElementById('ocrBtn');
+            const imgInput = document.getElementById('ticketImage');
+            const preview = document.getElementById('ticketPreview');
+            const validateBtn = document.getElementById('validateBtn');
+            const ssqCorrect = document.getElementById('ssqCorrect');
+            const fc3dCorrect = document.getElementById('fc3dCorrect');
+            if (!typeSelect || !ocrBtn || !imgInput || !validateBtn) return;
+
+            typeSelect.addEventListener('change', () => {
+                const v = typeSelect.value;
+                if (ssqCorrect) ssqCorrect.style.display = v === 'ssq' ? '' : 'none';
+                if (fc3dCorrect) fc3dCorrect.style.display = v === 'fc3d' ? '' : 'none';
+            });
+
+            imgInput.addEventListener('change', () => {
+                const file = imgInput.files && imgInput.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                if (preview) { preview.src = url; preview.style.display = 'block'; }
+            });
+
+            ocrBtn.addEventListener('click', async () => {
+                const file = imgInput.files && imgInput.files[0];
+                if (!file || !window.Tesseract) return;
+                const resEl = document.getElementById('validateResult');
+                if (resEl) resEl.textContent = '正在识别票面文字...';
+                const worker = await window.Tesseract.createWorker('chi_sim');
+                try {
+                    const { data } = await worker.recognize(file);
+                    const text = (data && data.text) ? data.text : '';
+                    this.fillFromOcrText(text);
+                    if (resEl) resEl.textContent = '识别完成，可校正后点“验证是否中奖”。';
+                } catch (e) {
+                    if (resEl) resEl.textContent = '识别失败，请手动输入后验证。';
+                } finally {
+                    await worker.terminate();
+                }
+            });
+
+            validateBtn.addEventListener('click', () => {
+                const type = typeSelect.value;
+                const resEl = document.getElementById('validateResult');
+                if (type === 'ssq') {
+                    const period = (document.getElementById('scanPeriod')?.value || '').trim();
+                    const reds = [1,2,3,4,5,6].map(i => parseInt(document.getElementById('scanRed'+i)?.value || '0', 10)).filter(n=>!isNaN(n)&&n>0);
+                    const blue = parseInt(document.getElementById('scanBlue')?.value || '0', 10);
+                    const result = this.checkSsqPrize(period, reds, blue);
+                    if (resEl) resEl.textContent = result.message;
+                } else {
+                    const period3d = (document.getElementById('scan3dPeriod')?.value || '').trim();
+                    const num = (document.getElementById('scan3d')?.value || '').trim();
+                    const result = this.checkFc3dPrize(period3d, num);
+                    if (resEl) resEl.textContent = result.message;
+                }
+            });
+        } catch(_) {}
+    }
+
+    // 从OCR文本中提取候选号码并填入输入框（用户可再校正）
+    fillFromOcrText(text) {
+        if (!text) return;
+        try {
+            const t = text.replace(/\s+/g, ' ');
+            const periodMatch = t.match(/20\d{4,6}/);
+            if (periodMatch) {
+                const val = periodMatch[0];
+                const pIn = document.getElementById('scanPeriod'); if (pIn) pIn.value = val;
+                const p3d = document.getElementById('scan3dPeriod'); if (p3d) p3d.value = val;
+            }
+            const reds = (t.match(/\b([1-9]|[12]\d|3[0-3])\b/g) || []).map(x=>parseInt(x,10));
+            if (reds.length >= 6) {
+                const top6 = reds.slice(0,6).sort((a,b)=>a-b);
+                top6.forEach((n,i)=>{ const el = document.getElementById('scanRed'+(i+1)); if (el) el.value = String(n).padStart(2,'0'); });
+            }
+            const blues = (t.match(/\b([1-9]|1[0-6])\b/g) || []).map(x=>parseInt(x,10)).filter(n=>n>=1 && n<=16);
+            if (blues.length > 0) {
+                const el = document.getElementById('scanBlue'); if (el) el.value = String(blues[0]).padStart(2,'0');
+            }
+            const n3d = t.match(/\b\d{3}\b/);
+            if (n3d) { const el = document.getElementById('scan3d'); if (el) el.value = n3d[0]; }
+        } catch(_) {}
+    }
+
+    // 双色球判奖
+    checkSsqPrize(period, redBalls, blueBall) {
+        if (!period || redBalls.length !== 6 || !blueBall) return { ok:false, message:'请输入完整的双色球期号与号码' };
+        if (!this.ssqHistoryData || this.ssqHistoryData.length === 0) return { ok:false, message:'暂无历史数据，稍后再试' };
+        const hit = this.ssqHistoryData.find(x => String(x.period) === String(period));
+        if (!hit) return { ok:false, message:'未找到该期历史数据' };
+        const redsWin = Array.isArray(hit.redBalls) ? hit.redBalls.map(Number) : String(hit.redBalls).split(',').map(x=>parseInt(x,10));
+        const blueWin = parseInt(hit.blueBall, 10);
+        const redHit = redBalls.filter(n => redsWin.includes(n)).length;
+        const blueHit = (blueWin === blueBall) ? 1 : 0;
+        let level = '未中奖';
+        if (redHit === 6 && blueHit === 1) level = '一等奖';
+        else if (redHit === 6 && blueHit === 0) level = '二等奖';
+        else if (redHit === 5 && blueHit === 1) level = '三等奖';
+        else if ((redHit === 5 && blueHit === 0) || (redHit === 4 && blueHit === 1)) level = '四等奖';
+        else if ((redHit === 4 && blueHit === 0) || (redHit === 3 && blueHit === 1)) level = '五等奖';
+        else if ((redHit <= 2 && blueHit === 1)) level = '六等奖';
+        return { ok: level !== '未中奖', message: `期号${period}：红中${redHit}、蓝${blueHit?'中':'未中'} → ${level}` };
+    }
+
+    // 福彩3D判奖（直选，完全一致才中）
+    checkFc3dPrize(period, numberStr) {
+        if (!period || !numberStr || numberStr.length !== 3) return { ok:false, message:'请输入完整的3D期号与三位号码' };
+        if (!this.historyData || this.historyData.length === 0) return { ok:false, message:'暂无3D历史数据，稍后再试' };
+        const hit = this.historyData.find(x => String(x.period) === String(period));
+        if (!hit) return { ok:false, message:'未找到该期3D历史数据' };
+        const isWin = String(hit.number) === String(numberStr);
+        return { ok:isWin, message: `期号${period}：${isWin ? '直选中奖' : '未中'}` };
+    }
+
     // 填充选择器选项
     populateSelectOptions() {
-        const selects = ['hundredsSelect', 'tensSelect', 'onesSelect'];
-        selects.forEach(selectId => {
-            const select = document.getElementById(selectId);
-            for (let i = 0; i <= 9; i++) {
-                const option = document.createElement('option');
-                option.value = i;
-                option.textContent = i;
-                select.appendChild(option);
-            }
-        });
+        // 手动选号板块已移除，保持空实现以防旧代码调用
+        return;
     }
 
     // 生成随机号码
@@ -841,15 +958,8 @@ class LotterySystem {
         }
     }
 
-    // 生成完整双色球号码
+    // 生成完整双色球号码（改为仅同步当前红/蓝到完整显示，不再自动生成）
     generateCompleteSSQ() {
-        // 生成红球
-        this.generateSmartRedBalls();
-        
-        // 生成蓝球
-        this.predictBlueBall();
-        
-        // 更新完整显示
         this.updateCompleteDisplay();
     }
 

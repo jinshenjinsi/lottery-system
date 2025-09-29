@@ -32,31 +32,7 @@
                 </div>
             </section>
 
-            <!-- 手动选号区域 -->
-            <section class="manual-pick">
-                <h2>手动选号</h2>
-                <div class="number-selector">
-                    <div class="digit-selector">
-                        <label>百位</label>
-                        <select id="hundredsSelect">
-                            <option value="">请选择</option>
-                        </select>
-                    </div>
-                    <div class="digit-selector">
-                        <label>十位</label>
-                        <select id="tensSelect">
-                            <option value="">请选择</option>
-                        </select>
-                    </div>
-                    <div class="digit-selector">
-                        <label>个位</label>
-                        <select id="onesSelect">
-                            <option value="">请选择</option>
-                        </select>
-                    </div>
-                </div>
-                <button id="confirmBtn" class="btn btn-primary">确认选号</button>
-            </section>
+            
 
             <!-- 历史数据分析（按需求隐藏福彩3D分析板块） -->
             <section class="analysis" style="display:none;">
@@ -202,7 +178,6 @@
                             <span class="blue-ball" id="completeBlue">0</span>
                         </div>
                         <div class="complete-controls">
-                            <button id="generateCompleteBtn" class="btn btn-primary">🎲 生成完整号码</button>
                             <button id="saveCompleteBtn" class="btn btn-success">💾 保存号码</button>
                         </div>
                     </div>
@@ -331,6 +306,8 @@
 
     <!-- 使用带版本号的新文件名，彻底绕过缓存 -->
     <script src="script.v20250910_03.js"></script>
+    <!-- OCR 库（前端本地识别用） -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
     <script>
       // 显示版本条，便于确认是否加载了最新构建
       (function(){
@@ -339,6 +316,57 @@
           bar.style.position='fixed';bar.style.left='8px';bar.style.bottom='8px';bar.style.background='rgba(0,0,0,.6)';bar.style.color='#fff';bar.style.padding='4px 8px';bar.style.borderRadius='6px';bar.style.fontSize='12px';bar.style.zIndex='9999';
           bar.textContent='Frontend Build: __BUILD_20250910_01__';
           document.body.appendChild(bar);
+        }catch(e){}
+      })();
+    </script>
+
+    <!-- 扫码验奖板块（插入到主内容之前） -->
+    <script>
+      (function(){
+        try{
+          const container = document.querySelector('main');
+          if(!container) return;
+          const section = document.createElement('section');
+          section.className = 'scan-validate';
+          section.innerHTML = `
+            <h2>📷 扫码验奖</h2>
+            <div class="scan-controls">
+              <label>彩种：</label>
+              <select id="scanLotteryType">
+                <option value="ssq">双色球</option>
+                <option value="fc3d">福彩3D</option>
+              </select>
+            </div>
+            <div class="upload-area">
+              <input type="file" id="ticketImage" accept="image/*" />
+              <button id="ocrBtn" class="btn btn-primary">🔍 OCR识别</button>
+            </div>
+            <div class="preview-area">
+              <img id="ticketPreview" style="max-width:100%;display:none;border:1px solid #eee;border-radius:8px;"/>
+            </div>
+            <div class="manual-correct">
+              <div data-type="ssq" id="ssqCorrect">
+                <h4>双色球号码校正</h4>
+                <div>期号：<input id="scanPeriod" style="width:120px" placeholder="如 2025112"/></div>
+                <div style="margin-top:6px">红球：
+                  <input id="scanRed1" size="2"/> <input id="scanRed2" size="2"/>
+                  <input id="scanRed3" size="2"/> <input id="scanRed4" size="2"/>
+                  <input id="scanRed5" size="2"/> <input id="scanRed6" size="2"/>
+                </div>
+                <div style="margin-top:6px">蓝球：<input id="scanBlue" size="2"/></div>
+              </div>
+              <div data-type="fc3d" id="fc3dCorrect" style="display:none">
+                <h4>福彩3D号码校正</h4>
+                <div>期号：<input id="scan3dPeriod" style="width:120px" placeholder="如 2024999"/></div>
+                <div style="margin-top:6px">号码：<input id="scan3d" size="4" placeholder="三位数，如 123"/></div>
+              </div>
+            </div>
+            <div style="margin-top:10px">
+              <button id="validateBtn" class="btn btn-success">✅ 验证是否中奖</button>
+            </div>
+            <div id="validateResult" style="margin-top:10px;color:#333"></div>
+          `;
+          container.insertBefore(section, container.firstChild);
         }catch(e){}
       })();
     </script>
