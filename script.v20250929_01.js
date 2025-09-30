@@ -1,4 +1,4 @@
-// 福彩3D预选系统 JavaScript v20250910_03
+// 福彩3D预选系统 JavaScript v20250929_01
 class LotterySystem {
     constructor() {
         // 仅使用真实数据来源
