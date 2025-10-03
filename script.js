@@ -1,85 +1,22 @@
-// 福彩3D预选系统 JavaScript v20250929_01
+// 福彩3D预选系统 JavaScript
 class LotterySystem {
     constructor() {
-        // 仅使用真实数据来源
-        this.historyData = [];
-        this.ssqHistoryData = [];
+        this.historyData = this.generateMockHistoryData();
+        this.ssqHistoryData = this.generateSSQHistoryData();
         this.myPicks = JSON.parse(localStorage.getItem('myPicks')) || [];
         this.ssqPicks = JSON.parse(localStorage.getItem('ssqPicks')) || [];
         this.lstmModel = null;
-        // iOS安全模式：默认禁用联网更新（可由用户开关启用）
-        this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        this.enableNetwork = JSON.parse(localStorage.getItem('enableNetwork'));
-        if (this.enableNetwork === null || this.enableNetwork === undefined) {
-            this.enableNetwork = !this.isIOS; // iOS默认false，其他平台默认true
-        }
-        // Render 环境：默认启用联网并跳过缓存
-        this.isRender = (typeof window !== 'undefined') && (window.location.host || '').includes('onrender.com');
-        if (this.isRender) {
-            this.enableNetwork = true;
-            localStorage.setItem('enableNetwork','true');
-            // 在构造阶段即跳过缓存并强制需要更新，防止任何早期流程读取缓存
-            try {
-                this.shouldUpdateData = function(){ return true; };
-                this.loadDataFromCache = function(){ this.historyData=[]; this.ssqHistoryData=[]; console.log('skip cache(render ctor)'); };
-            } catch(_){}
-        }
-        this.dataSource = '等待数据';
-        this.apiBaseUrl = this.getApiBaseUrl();
         this.init();
-    }
-
-    // 获取后端API基础URL（Render/本地/局域网）
-    getApiBaseUrl() {
-        try {
-            const host = window.location.host || '';
-            const hostname = window.location.hostname || '';
-            // Render 前端域名：固定走 Render 后端
-            if (host.includes('onrender.com')) {
-                return 'https://lottery-system88.onrender.com';
-            }
-            // 本机
-            if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                return 'http://localhost:5050';
-            }
-            // 同局域网访问（避免浏览器拦截 5060）
-            return `http://${hostname}:5050`;
-        } catch (e) {
-            console.log('获取API地址失败:', e);
-            return null;
-        }
     }
 
     init() {
         this.setupEventListeners();
         this.populateSelectOptions();
-        // 隐藏了福彩3D分析与智能推荐，不再计算
+        this.updateAnalysis();
         this.displayMyPicks();
+        this.generateRecommendations();
         this.initSSQSystem();
-        this.initHistoryData().then(() => {
-            this.updateLatestDates();
-            this.updateDataSourceDisplay();
-        });
-        // 扫码验奖事件
-        this.setupScanValidate();
-        // 初始化网络开关UI
-        const toggle = document.getElementById('enableNetworkToggle');
-        if (toggle) {
-            toggle.checked = !!this.enableNetwork;
-            toggle.addEventListener('change', () => {
-                this.enableNetwork = toggle.checked;
-                localStorage.setItem('enableNetwork', JSON.stringify(this.enableNetwork));
-                if (this.enableNetwork) {
-                    this.loadRealData().then(() => {
-                        this.updateAnalysis();
-                        this.displayFc3dHistory();
-                        this.displaySsqHistory();
-                        this.updateLatestDates();
-                        this.updateDataSourceDisplay();
-                    });
-                }
-            });
-        }
+        this.initHistoryData();
     }
 
     // 生成模拟历史数据
@@ -173,16 +110,13 @@ class LotterySystem {
             this.generateAnalyzedNumber();
         });
 
-        // 手动选号已移除（保持兼容，若存在则绑定）
-        const manualConfirmBtn = document.getElementById('confirmBtn');
-        if (manualConfirmBtn) {
-            manualConfirmBtn.addEventListener('click', () => {
-                this.confirmManualPick();
-            });
-        }
+        // 手动选号
+        document.getElementById('confirmBtn').addEventListener('click', () => {
+            this.confirmManualPick();
+        });
 
-        // 分析标签页（仅限分析区域内的tab）
-        document.querySelectorAll('.analysis .tab-btn').forEach(btn => {
+        // 分析标签页
+        document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 this.switchTab(e.target.dataset.tab);
             });
@@ -203,9 +137,6 @@ class LotterySystem {
         
         // 往期数据事件监听器
         this.setupHistoryEventListeners();
-        
-        // 数据更新事件监听器
-        this.setupDataUpdateListeners();
     }
 
     // 设置双色球事件监听器
@@ -228,140 +159,28 @@ class LotterySystem {
             this.generateSmartRedBalls();
         });
 
-        // 生成完整号码按钮已移除（若存在则兼容绑定）
-        const generateCompleteBtn = document.getElementById('generateCompleteBtn');
-        if (generateCompleteBtn) {
-            generateCompleteBtn.addEventListener('click', () => {
-                this.generateCompleteSSQ();
-            });
-        }
+        // 完整双色球
+        document.getElementById('generateCompleteBtn').addEventListener('click', () => {
+            this.generateCompleteSSQ();
+        });
 
         document.getElementById('saveCompleteBtn').addEventListener('click', () => {
             this.saveCompleteSSQ();
         });
     }
 
-    // 扫码验奖：初始化事件
-    setupScanValidate() {
-        try {
-            const typeSelect = document.getElementById('scanLotteryType');
-            const ocrBtn = document.getElementById('ocrBtn');
-            const imgInput = document.getElementById('ticketImage');
-            const preview = document.getElementById('ticketPreview');
-            const validateBtn = document.getElementById('validateBtn');
-            const ssqCorrect = document.getElementById('ssqCorrect');
-            const fc3dCorrect = document.getElementById('fc3dCorrect');
-            if (!typeSelect || !ocrBtn || !imgInput || !validateBtn) return;
-
-            typeSelect.addEventListener('change', () => {
-                const v = typeSelect.value;
-                if (ssqCorrect) ssqCorrect.style.display = v === 'ssq' ? '' : 'none';
-                if (fc3dCorrect) fc3dCorrect.style.display = v === 'fc3d' ? '' : 'none';
-            });
-
-            imgInput.addEventListener('change', () => {
-                const file = imgInput.files && imgInput.files[0];
-                if (!file) return;
-                const url = URL.createObjectURL(file);
-                if (preview) { preview.src = url; preview.style.display = 'block'; }
-            });
-
-            ocrBtn.addEventListener('click', async () => {
-                const file = imgInput.files && imgInput.files[0];
-                if (!file || !window.Tesseract) return;
-                const resEl = document.getElementById('validateResult');
-                if (resEl) resEl.textContent = '正在识别票面文字...';
-                const worker = await window.Tesseract.createWorker('chi_sim');
-                try {
-                    const { data } = await worker.recognize(file);
-                    const text = (data && data.text) ? data.text : '';
-                    this.fillFromOcrText(text);
-                    if (resEl) resEl.textContent = '识别完成，可校正后点“验证是否中奖”。';
-                } catch (e) {
-                    if (resEl) resEl.textContent = '识别失败，请手动输入后验证。';
-                } finally {
-                    await worker.terminate();
-                }
-            });
-
-            validateBtn.addEventListener('click', () => {
-                const type = typeSelect.value;
-                const resEl = document.getElementById('validateResult');
-                if (type === 'ssq') {
-                    const period = (document.getElementById('scanPeriod')?.value || '').trim();
-                    const reds = [1,2,3,4,5,6].map(i => parseInt(document.getElementById('scanRed'+i)?.value || '0', 10)).filter(n=>!isNaN(n)&&n>0);
-                    const blue = parseInt(document.getElementById('scanBlue')?.value || '0', 10);
-                    const result = this.checkSsqPrize(period, reds, blue);
-                    if (resEl) resEl.textContent = result.message;
-                } else {
-                    const period3d = (document.getElementById('scan3dPeriod')?.value || '').trim();
-                    const num = (document.getElementById('scan3d')?.value || '').trim();
-                    const result = this.checkFc3dPrize(period3d, num);
-                    if (resEl) resEl.textContent = result.message;
-                }
-            });
-        } catch(_) {}
-    }
-
-    // 从OCR文本中提取候选号码并填入输入框（用户可再校正）
-    fillFromOcrText(text) {
-        if (!text) return;
-        try {
-            const t = text.replace(/\s+/g, ' ');
-            const periodMatch = t.match(/20\d{4,6}/);
-            if (periodMatch) {
-                const val = periodMatch[0];
-                const pIn = document.getElementById('scanPeriod'); if (pIn) pIn.value = val;
-                const p3d = document.getElementById('scan3dPeriod'); if (p3d) p3d.value = val;
-            }
-            const reds = (t.match(/\b([1-9]|[12]\d|3[0-3])\b/g) || []).map(x=>parseInt(x,10));
-            if (reds.length >= 6) {
-                const top6 = reds.slice(0,6).sort((a,b)=>a-b);
-                top6.forEach((n,i)=>{ const el = document.getElementById('scanRed'+(i+1)); if (el) el.value = String(n).padStart(2,'0'); });
-            }
-            const blues = (t.match(/\b([1-9]|1[0-6])\b/g) || []).map(x=>parseInt(x,10)).filter(n=>n>=1 && n<=16);
-            if (blues.length > 0) {
-                const el = document.getElementById('scanBlue'); if (el) el.value = String(blues[0]).padStart(2,'0');
-            }
-            const n3d = t.match(/\b\d{3}\b/);
-            if (n3d) { const el = document.getElementById('scan3d'); if (el) el.value = n3d[0]; }
-        } catch(_) {}
-    }
-
-    // 双色球判奖
-    checkSsqPrize(period, redBalls, blueBall) {
-        if (!period || redBalls.length !== 6 || !blueBall) return { ok:false, message:'请输入完整的双色球期号与号码' };
-        if (!this.ssqHistoryData || this.ssqHistoryData.length === 0) return { ok:false, message:'暂无历史数据，稍后再试' };
-        const hit = this.ssqHistoryData.find(x => String(x.period) === String(period));
-        if (!hit) return { ok:false, message:'未找到该期历史数据' };
-        const redsWin = Array.isArray(hit.redBalls) ? hit.redBalls.map(Number) : String(hit.redBalls).split(',').map(x=>parseInt(x,10));
-        const blueWin = parseInt(hit.blueBall, 10);
-        const redHit = redBalls.filter(n => redsWin.includes(n)).length;
-        const blueHit = (blueWin === blueBall) ? 1 : 0;
-        let level = '未中奖';
-        if (redHit === 6 && blueHit === 1) level = '一等奖';
-        else if (redHit === 6 && blueHit === 0) level = '二等奖';
-        else if (redHit === 5 && blueHit === 1) level = '三等奖';
-        else if ((redHit === 5 && blueHit === 0) || (redHit === 4 && blueHit === 1)) level = '四等奖';
-        else if ((redHit === 4 && blueHit === 0) || (redHit === 3 && blueHit === 1)) level = '五等奖';
-        else if ((redHit <= 2 && blueHit === 1)) level = '六等奖';
-        return { ok: level !== '未中奖', message: `期号${period}：红中${redHit}、蓝${blueHit?'中':'未中'} → ${level}` };
-    }
-
-    // 福彩3D判奖（直选，完全一致才中）
-    checkFc3dPrize(period, numberStr) {
-        if (!period || !numberStr || numberStr.length !== 3) return { ok:false, message:'请输入完整的3D期号与三位号码' };
-        if (!this.historyData || this.historyData.length === 0) return { ok:false, message:'暂无3D历史数据，稍后再试' };
-        const hit = this.historyData.find(x => String(x.period) === String(period));
-        if (!hit) return { ok:false, message:'未找到该期3D历史数据' };
-        const isWin = String(hit.number) === String(numberStr);
-        return { ok:isWin, message: `期号${period}：${isWin ? '直选中奖' : '未中'}` };
-    }
-
     // 填充选择器选项
     populateSelectOptions() {
-        // 手动选号板块已移除，保持空实现以防旧代码调用
-        return;
+        const selects = ['hundredsSelect', 'tensSelect', 'onesSelect'];
+        selects.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            for (let i = 0; i <= 9; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                select.appendChild(option);
+            }
+        });
     }
 
     // 生成随机号码
@@ -457,47 +276,24 @@ class LotterySystem {
         this.displayMyPicks();
     }
 
-    // 显示我的选号记录（包含福彩3D与双色球）
+    // 显示我的选号记录
     displayMyPicks() {
         const picksList = document.getElementById('picksList');
-        if (!picksList) return;
-
-        const has3D = this.myPicks && this.myPicks.length > 0;
-        const hasSSQ = this.ssqPicks && this.ssqPicks.length > 0;
-
-        if (!has3D && !hasSSQ) {
+        
+        if (this.myPicks.length === 0) {
             picksList.innerHTML = '<p class="empty-message">暂无选号记录</p>';
             return;
         }
-
-        // 将两类记录合并展示（3D在前，随后展示双色球）
-        let html = '';
-
-        if (has3D) {
-            html += this.myPicks.map(pick => `
-                <div class="pick-item">
-                    <div>
-                        <div class="pick-number">${pick.number}</div>
-                        <div class="pick-method">${pick.method} · 福彩3D</div>
-                    </div>
-                    <div class="pick-time">${pick.time}</div>
+        
+        picksList.innerHTML = this.myPicks.map(pick => `
+            <div class="pick-item">
+                <div>
+                    <div class="pick-number">${pick.number}</div>
+                    <div class="pick-method">${pick.method}</div>
                 </div>
-            `).join('');
-        }
-
-        if (hasSSQ) {
-            html += this.ssqPicks.map(pick => `
-                <div class="pick-item">
-                    <div>
-                        <div class="pick-number">${pick.redBalls.join(', ')} + ${pick.blueBall}</div>
-                        <div class="pick-method">${pick.method} · 双色球</div>
-                    </div>
-                    <div class="pick-time">${pick.time}</div>
-                </div>
-            `).join('');
-        }
-
-        picksList.innerHTML = html;
+                <div class="pick-time">${pick.time}</div>
+            </div>
+        `).join('');
     }
 
     // 清空选号记录
@@ -511,17 +307,15 @@ class LotterySystem {
 
     // 切换分析标签页
     switchTab(tabName) {
-        // 仅作用于分析区域
-        const analysisSection = document.querySelector('.analysis');
-        if (!analysisSection) return;
-        analysisSection.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        analysisSection.querySelectorAll('#hot-cold, #trend, #pattern').forEach(content => content.classList.remove('active'));
+        // 移除所有活动状态
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
         
-        const targetBtn = analysisSection.querySelector(`[data-tab="${tabName}"]`);
-        if (targetBtn) targetBtn.classList.add('active');
-        const targetContent = analysisSection.querySelector(`#${tabName}`);
-        if (targetContent) targetContent.classList.add('active');
+        // 激活选中的标签页
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        document.getElementById(tabName).classList.add('active');
         
+        // 如果是走势分析标签页，绘制图表
         if (tabName === 'trend') {
             this.drawTrendChart();
         }
@@ -681,115 +475,43 @@ class LotterySystem {
         // 清空画布
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 画布与坐标系边距
-        const paddingLeft = 50;
-        const paddingRight = 50;
-        const paddingTop = 40;
-        const paddingBottom = 50;
-
-        // 颜色与样式
-        const axisColor = '#444';
-        const gridColor = '#e6e8f2';
-        const lineColor = '#667eea';
-        const pointColor = '#667eea';
-        const textColor = '#333';
-
-        // 数据准备
-        const recentData = this.historyData.slice(0, 20);
-        if (recentData.length === 0) return;
-        const plotWidth = canvas.width - paddingLeft - paddingRight;
-        const plotHeight = canvas.height - paddingTop - paddingBottom;
-
-        // 轴域：和值范围 0~27
-        const yMin = 0;
-        const yMax = 27;
-        const yRange = yMax - yMin;
-
-        // 辅助函数：映射到坐标
-        const xScale = (i) => paddingLeft + (i * (plotWidth / Math.max(1, (recentData.length - 1))));
-        const yScale = (val) => paddingTop + (plotHeight - (val - yMin) * (plotHeight / yRange));
-
-        // 背景网格与Y轴刻度（每3为一格：0,3,6,...,27）
-        ctx.strokeStyle = gridColor;
-        ctx.fillStyle = textColor;
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        for (let y = yMin; y <= yMax; y += 3) {
-            const yPos = yScale(y);
-            // 网格线
-            ctx.beginPath();
-            ctx.moveTo(paddingLeft, yPos);
-            ctx.lineTo(canvas.width - paddingRight, yPos);
-            ctx.stroke();
-            // 刻度值
-            ctx.fillText(String(y), paddingLeft - 8, yPos);
-        }
-
-        // X轴刻度（显示第1、5、10、15、20个点）
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        for (let i = 0; i < recentData.length; i++) {
-            if ([0, 4, 9, 14, 19].includes(i)) {
-                const x = xScale(i);
-                // 小刻度线
-                ctx.strokeStyle = gridColor;
-                ctx.beginPath();
-                ctx.moveTo(x, canvas.height - paddingBottom);
-                ctx.lineTo(x, paddingTop);
-                ctx.stroke();
-                // 刻度值（序号）
-                ctx.fillText(String(i + 1), x, canvas.height - paddingBottom + 6);
-            }
-        }
-
-        // 坐标轴
-        ctx.strokeStyle = axisColor;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        // Y轴
-        ctx.moveTo(paddingLeft, paddingTop);
-        ctx.lineTo(paddingLeft, canvas.height - paddingBottom);
-        // X轴
-        ctx.lineTo(canvas.width - paddingRight, canvas.height - paddingBottom);
-        ctx.stroke();
-
-        // 轴标题
-        ctx.fillStyle = textColor;
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('期序', paddingLeft + plotWidth / 2, canvas.height - 12);
-        ctx.save();
-        ctx.translate(16, paddingTop + plotHeight / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillText('和值', 0, 0);
-        ctx.restore();
-
-        // 值走势线
-        const points = recentData.map((item, index) => ({ x: xScale(index), y: yScale(item.sum) }));
-
-        ctx.strokeStyle = lineColor;
+        // 设置样式
+        ctx.strokeStyle = '#667eea';
         ctx.lineWidth = 2;
+        ctx.fillStyle = '#667eea';
+        
+        // 绘制坐标轴
+        ctx.beginPath();
+        ctx.moveTo(50, 50);
+        ctx.lineTo(50, canvas.height - 50);
+        ctx.lineTo(canvas.width - 50, canvas.height - 50);
+        ctx.stroke();
+        
+        // 绘制和值走势
+        const recentData = this.historyData.slice(0, 20);
+        const points = recentData.map((item, index) => ({
+            x: 50 + (index * (canvas.width - 100) / (recentData.length - 1)),
+            y: canvas.height - 50 - (item.sum * (canvas.height - 100) / 27)
+        }));
+        
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        points.forEach(point => {
+            ctx.lineTo(point.x, point.y);
+        });
         ctx.stroke();
-
-        // 数据点
-        ctx.fillStyle = pointColor;
+        
+        // 绘制数据点
         points.forEach(point => {
             ctx.beginPath();
-            ctx.arc(point.x, point.y, 3.5, 0, 2 * Math.PI);
+            ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
             ctx.fill();
         });
         
-        // 标题
-        ctx.fillStyle = textColor;
+        // 添加标签
+        ctx.fillStyle = '#333';
         ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('和值走势图', paddingLeft + plotWidth / 2, 24);
+        ctx.fillText('和值走势图', canvas.width / 2 - 50, 30);
     }
 
     // 生成推荐号码
@@ -958,8 +680,15 @@ class LotterySystem {
         }
     }
 
-    // 生成完整双色球号码（改为仅同步当前红/蓝到完整显示，不再自动生成）
+    // 生成完整双色球号码
     generateCompleteSSQ() {
+        // 生成红球
+        this.generateSmartRedBalls();
+        
+        // 生成蓝球
+        this.predictBlueBall();
+        
+        // 更新完整显示
         this.updateCompleteDisplay();
     }
 
@@ -1022,102 +751,6 @@ class LotterySystem {
     updateSSQAnalysis() {
         this.updateBlueAnalysis();
         this.updateRedAnalysis();
-    }
-
-    // 更新标题旁的下一期开奖日期（无数据也能计算）
-    updateLatestDates() {
-        const fc3dEl = document.getElementById('fc3dLatestDate');
-        const ssqEl = document.getElementById('ssqLatestDate');
-        const fc3dDate = this.historyData && this.historyData.length > 0 ? this.computeNextFc3dDateFromData(this.historyData) : this.computeNextFc3dDate();
-        // 仅展示“下一期日期”推算，不改写历史数据日期
-        const ssqDate = this.computeNextSsqDate();
-        if (fc3dEl) fc3dEl.textContent = fc3dDate ? `（下一期：${fc3dDate}）` : '';
-        if (ssqEl) ssqEl.textContent = ssqDate ? `（下一期：${ssqDate}）` : '';
-    }
-
-    computeNextFc3dDate() {
-        const now = new Date();
-        // 每天21:15开奖，过了21:15则次日
-        const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
-        if (after) now.setDate(now.getDate() + 1);
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const d = String(now.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    }
-
-    computeNextFc3dDateFromData(data) {
-        // 以最新一期的日期为基准再按规则计算
-        try {
-            const latest = data[0];
-            const base = new Date(latest.date);
-            const now = new Date();
-            // 若今日已过开奖时间，则返回明天，否则今天
-            const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
-            if (after) base.setDate(base.getDate() + 1);
-            const y = base.getFullYear();
-            const m = String(base.getMonth() + 1).padStart(2, '0');
-            const d = String(base.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        } catch {
-            return this.computeNextFc3dDate();
-        }
-    }
-
-    computeNextSsqDate() {
-        const now = new Date();
-        // 双色球：周二(2)、周四(4)、周日(0)的21:15
-        const drawDays = new Set([0, 2, 4]);
-        const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
-        let day = now.getDay();
-        let add = 0;
-        const nextDrawIn = (fromDay) => {
-            for (let i = 0; i <= 7; i++) {
-                const d = (fromDay + i) % 7;
-                if (drawDays.has(d)) return i;
-            }
-            return 2;
-        };
-        if (drawDays.has(day)) {
-            add = after ? nextDrawIn((day + 1) % 7) + 1 : 0;
-        } else {
-            add = nextDrawIn(day);
-        }
-        const dt = new Date(now);
-        dt.setDate(dt.getDate() + add);
-        const y = dt.getFullYear();
-        const m = String(dt.getMonth() + 1).padStart(2, '0');
-        const d = String(dt.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    }
-
-    computeNextSsqDateFromData(data) {
-        try {
-            // data[0].date 可能含（周几）括号，先取日期部分
-            const latest = data[0];
-            const dateStr = String(latest.date).split('(')[0];
-            const base = new Date(dateStr);
-            const now = new Date();
-            const drawDays = new Set([0, 2, 4]);
-            const after = now.getHours() > 21 || (now.getHours() === 21 && now.getMinutes() >= 15);
-            let day = base.getDay();
-            let add;
-            const next = (from) => {
-                for (let i = 1; i <= 7; i++) {
-                    const d = (from + i) % 7;
-                    if (drawDays.has(d)) return i;
-                }
-                return 2;
-            };
-            add = after ? next(day) : 0;
-            base.setDate(base.getDate() + add);
-            const y = base.getFullYear();
-            const m = String(base.getMonth() + 1).padStart(2, '0');
-            const d = String(base.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        } catch {
-            return this.computeNextSsqDate();
-        }
     }
 
     // 更新蓝球分析
@@ -1188,27 +821,16 @@ class LotterySystem {
     // ==================== 往期数据相关方法 ====================
 
     // 初始化往期数据系统
-    async initHistoryData() {
+    initHistoryData() {
         this.fc3dCurrentPage = 1;
         this.ssqCurrentPage = 1;
         this.fc3dItemsPerPage = 20;
         this.ssqItemsPerPage = 20;
-        
-        // Render 环境：跳过缓存，强制拉取真实数据（再次确保）
-        if (this.isRender) {
-            try { this.loadDataFromCache = function(){ this.historyData=[]; this.ssqHistoryData=[]; console.log('skip cache(render init)'); }; } catch(_){}
-        }
-        await this.loadRealData();
-        
         this.fc3dFilteredData = this.historyData;
         this.ssqFilteredData = this.ssqHistoryData;
         
         this.displayFc3dHistory();
         this.displaySsqHistory();
-        // Render 环境：立即刷新双色球分析
-        if (this.isRender) {
-            try { this.updateBlueAnalysis(); this.updateRedAnalysis(); } catch(_){}
-        }
     }
 
     // 设置往期数据事件监听器
@@ -1279,534 +901,6 @@ class LotterySystem {
             this.ssqCurrentPage++;
             this.displaySsqHistory();
         });
-    }
-
-    // 数据更新按钮与显示
-    setupDataUpdateListeners() {
-        const updateBtn = document.getElementById('updateDataBtn');
-        const updateTimeElement = document.getElementById('lastUpdateTime');
-        
-        if (updateTimeElement) {
-            const cachedTime = localStorage.getItem('lastDataUpdate');
-            if (cachedTime) {
-                updateTimeElement.textContent = new Date(cachedTime).toLocaleString('zh-CN');
-            }
-        }
-        
-        if (updateBtn) {
-            updateBtn.addEventListener('click', async () => {
-                // 临时启用网络更新（即使iOS安全模式也允许手动更新）
-                const originalNetworkState = this.enableNetwork;
-                this.enableNetwork = true;
-                
-                try {
-                    await this.loadRealData();
-                    this.updateAnalysis();
-                    this.displayFc3dHistory();
-                    this.displaySsqHistory();
-                    this.updateDataSourceDisplay();
-                    this.updateLatestDates();
-                    
-                    // 显示更新结果
-                    const btn = document.getElementById('updateDataBtn');
-                    if (btn) {
-                        const originalText = btn.textContent;
-                        btn.textContent = '✅ 更新成功';
-                        btn.style.background = '#28a745';
-                        setTimeout(() => {
-                            btn.textContent = originalText;
-                            btn.style.background = '';
-                        }, 2000);
-                    }
-                } catch (error) {
-                    console.log('手动更新失败:', error);
-                    const btn = document.getElementById('updateDataBtn');
-                    if (btn) {
-                        const originalText = btn.textContent;
-                        btn.textContent = '❌ 更新失败';
-                        btn.style.background = '#dc3545';
-                        setTimeout(() => {
-                            btn.textContent = originalText;
-                            btn.style.background = '';
-                        }, 2000);
-                    }
-                } finally {
-                    // 恢复原始网络状态
-                    this.enableNetwork = originalNetworkState;
-                }
-            });
-        }
-    }
-
-    // ==================== 真实数据获取方法 ====================
-
-    // 加载真实数据
-    async loadRealData() {
-        // Render 环境：强制联网，跳过所有缓存逻辑
-        if (this.isRender) {
-            console.log('Render环境：强制获取真实数据...');
-            try {
-                const [fc3dData, ssqData] = await Promise.all([
-                    this.fetchFc3dData(),
-                    this.fetchSsqData()
-                ]);
-                
-                if (fc3dData && fc3dData.length > 0) {
-                    this.historyData = fc3dData;
-                    console.log('福彩3D数据更新成功');
-                    this.dataSource = '真实API数据';
-                }
-                
-                if (ssqData && ssqData.length > 0) {
-                    this.ssqHistoryData = ssqData;
-                    console.log('双色球数据更新成功');
-                    this.dataSource = '真实API数据';
-                }
-                
-                this.updateLastUpdateTime();
-                return;
-            } catch (error) {
-                console.log('Render环境获取真实数据失败:', error);
-                this.dataSource = '数据获取失败';
-                this.historyData = [];
-                this.ssqHistoryData = [];
-                return;
-            }
-        }
-        
-        if (!this.enableNetwork) {
-            console.log('已禁用联网更新（安全模式）');
-            this.dataSource = '本地缓存（安全模式）';
-            this.loadDataFromCache();
-            return;
-        }
-        try {
-            // 检查是否需要更新数据
-            if (this.shouldUpdateData()) {
-                console.log('正在获取真实彩票数据...');
-                
-                // 并行获取福彩3D和双色球数据
-                const [fc3dData, ssqData] = await Promise.all([
-                    this.fetchFc3dData(),
-                    this.fetchSsqData()
-                ]);
-                
-                if (fc3dData && fc3dData.length > 0) {
-                    this.historyData = fc3dData;
-                    this.saveDataToCache('fc3d', fc3dData);
-                    console.log('福彩3D数据更新成功');
-                    this.dataSource = '真实API数据';
-                }
-                
-                if (ssqData && ssqData.length > 0) {
-                    this.ssqHistoryData = ssqData;
-                    this.saveDataToCache('ssq', ssqData);
-                    console.log('双色球数据更新成功');
-                    this.dataSource = '真实API数据';
-                }
-                
-                this.updateLastUpdateTime();
-            } else {
-                // 使用缓存数据
-                this.dataSource = '本地缓存';
-                this.loadDataFromCache();
-            }
-        } catch (error) {
-            console.log('获取真实数据失败:', error);
-            this.dataSource = '数据获取失败';
-        }
-    }
-
-    // 获取福彩3D真实数据
-    async fetchFc3dData() {
-        try {
-            const base = this.apiBaseUrl;
-            if (!base) return null;
-            const response = await fetch(`${base}/api/fc3d?limit=300`, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data && result.data.length > 0) {
-                    console.log('成功获取真实福彩3D数据');
-                    this.dataSource = '真实开奖数据';
-                    return this.formatFc3dData(result.data);
-                }
-            }
-            return null;
-            
-        } catch (error) {
-            console.log('福彩3D数据获取失败:', error);
-            return null;
-        }
-    }
-
-    // 获取双色球真实数据
-    async fetchSsqData() {
-        try {
-            const base = this.apiBaseUrl;
-            if (!base) return null;
-            const response = await fetch(`${base}/api/ssq?limit=300`, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data && result.data.length > 0) {
-                    console.log('成功获取真实双色球数据');
-                    this.dataSource = '真实开奖数据';
-                    return this.formatSsqData(result.data);
-                }
-            }
-            return null;
-            
-        } catch (error) {
-            console.log('双色球数据获取失败:', error);
-            return null;
-        }
-    }
-
-    // 格式化福彩3D数据
-    formatFc3dData(rawData) {
-        return rawData.map(item => {
-            // 处理不同的数据格式
-            let number = item.number || item.red || '';
-            let period = item.period || item.code || '';
-            let date = item.date || '';
-            
-            // 清理号码格式（移除空格、特殊字符）
-            number = number.replace(/[^\d]/g, '');
-            
-            // 确保号码是3位数
-            if (number.length !== 3) {
-                console.warn(`福彩3D号码格式异常: ${number}`);
-                return null;
-            }
-            
-            const digits = number.split('').map(Number);
-            return {
-                period: period,
-                date: date,
-                number: number,
-                sum: digits.reduce((a, b) => a + b, 0),
-                span: Math.max(...digits) - Math.min(...digits),
-                oddCount: digits.filter(d => d % 2 === 1).length,
-                evenCount: digits.filter(d => d % 2 === 0).length,
-                bigCount: digits.filter(d => d >= 5).length,
-                smallCount: digits.filter(d => d < 5).length
-            };
-        }).filter(item => item !== null);
-    }
-
-    // 格式化双色球数据（兼容字符串/数组红球）
-    formatSsqData(rawData) {
-        const formatted = rawData.map(item => {
-            // 处理不同的数据格式
-            let redBalls = [];
-            let blueBall = 0;
-            let period = item.period || item.code || '';
-            let date = item.date || '';
-            
-            // 处理红球数据
-            if (item.redBalls) {
-                if (Array.isArray(item.redBalls)) {
-                    redBalls = item.redBalls.map(n => parseInt(n, 10)).filter(n => !isNaN(n));
-                } else if (typeof item.redBalls === 'string') {
-                    redBalls = item.redBalls.split(',').map(s => parseInt(s, 10)).filter(n => !isNaN(n));
-                }
-            } else if (item.red) {
-                redBalls = String(item.red).split(',').map(s => parseInt(s, 10)).filter(n => !isNaN(n));
-            }
-            
-            // 处理蓝球数据
-            blueBall = parseInt(item.blueBall || item.blue || 0, 10);
-            
-            // 验证数据有效性
-            if (redBalls.length !== 6 || blueBall < 1 || blueBall > 16) {
-                console.warn(`双色球数据格式异常: 红球${redBalls}, 蓝球${blueBall}`);
-                return null;
-            }
-            
-            // 确保红球在1-33范围内
-            redBalls = redBalls.filter(n => n >= 1 && n <= 33);
-            if (redBalls.length !== 6) {
-                console.warn(`双色球红球数量异常: ${redBalls.length}`);
-                return null;
-            }
-            
-            return {
-                period,
-                date,
-                redBalls: redBalls.sort((a, b) => a - b).map(n => String(n).padStart(2, '0')),
-                blueBall: String(blueBall).padStart(2, '0'),
-                redSum: redBalls.reduce((a, b) => a + b, 0),
-                redOddCount: redBalls.filter(n => n % 2 === 1).length,
-                redEvenCount: redBalls.filter(n => n % 2 === 0).length,
-                redBigCount: redBalls.filter(n => n > 16).length,
-                redSmallCount: redBalls.filter(n => n <= 16).length
-            };
-        }).filter(item => item !== null);
-
-        if (formatted.length > 0) this.dataSource = '真实API数据';
-        return formatted;
-    }
-
-    // 生成基于真实格式的福彩3D数据
-    generateRealisticFc3dData() {
-        const data = [];
-        const today = new Date();
-        
-        for (let i = 0; i < 300; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            
-            // 使用更真实的号码生成算法
-            const number = this.generateRealisticFc3dNumber();
-            const digits = number.split('').map(Number);
-            
-            data.push({
-                period: `2024${String(1000 - i).padStart(3, '0')}`,
-                date: date.toISOString().split('T')[0],
-                number: number,
-                sum: digits.reduce((a, b) => a + b, 0),
-                span: Math.max(...digits) - Math.min(...digits),
-                oddCount: digits.filter(d => d % 2 === 1).length,
-                evenCount: digits.filter(d => d % 2 === 0).length,
-                bigCount: digits.filter(d => d >= 5).length,
-                smallCount: digits.filter(d => d < 5).length
-            });
-        }
-        
-        return data;
-    }
-
-    // 生成基于真实格式的双色球数据
-    generateRealisticSsqData() {
-        const data = [];
-        const today = new Date();
-        
-        for (let i = 0; i < 300; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            
-            const redBalls = this.generateRealisticSsqRedBalls();
-            const blueBall = Math.floor(Math.random() * 16) + 1;
-            
-            data.push({
-                period: `2024${String(1000 - i).padStart(3, '0')}`,
-                date: date.toISOString().split('T')[0],
-                redBalls: redBalls,
-                blueBall: blueBall,
-                redSum: redBalls.reduce((a, b) => a + b, 0),
-                redOddCount: redBalls.filter(n => n % 2 === 1).length,
-                redEvenCount: redBalls.filter(n => n % 2 === 0).length,
-                redBigCount: redBalls.filter(n => n > 16).length,
-                redSmallCount: redBalls.filter(n => n <= 16).length
-            });
-        }
-        
-        return data;
-    }
-
-    // 生成增强的模拟福彩3D数据
-    generateEnhancedMockFc3dData() {
-        const data = [];
-        const today = new Date();
-        
-        for (let i = 0; i < 300; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            
-            // 使用更真实的号码生成算法
-            const number = this.generateRealisticFc3dNumber();
-            const digits = number.split('').map(Number);
-            
-            data.push({
-                period: `2024${String(1000 - i).padStart(3, '0')}`,
-                date: date.toISOString().split('T')[0],
-                number: number,
-                sum: digits.reduce((a, b) => a + b, 0),
-                span: Math.max(...digits) - Math.min(...digits),
-                oddCount: digits.filter(d => d % 2 === 1).length,
-                evenCount: digits.filter(d => d % 2 === 0).length,
-                bigCount: digits.filter(d => d >= 5).length,
-                smallCount: digits.filter(d => d < 5).length
-            });
-        }
-        
-        return data;
-    }
-
-    // 生成增强的模拟双色球数据
-    generateEnhancedMockSsqData() {
-        const data = [];
-        const today = new Date();
-        
-        for (let i = 0; i < 300; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            
-            const redBalls = this.generateRealisticSsqRedBalls();
-            const blueBall = Math.floor(Math.random() * 16) + 1;
-            
-            data.push({
-                period: `2024${String(1000 - i).padStart(3, '0')}`,
-                date: date.toISOString().split('T')[0],
-                redBalls: redBalls,
-                blueBall: blueBall,
-                redSum: redBalls.reduce((a, b) => a + b, 0),
-                redOddCount: redBalls.filter(n => n % 2 === 1).length,
-                redEvenCount: redBalls.filter(n => n % 2 === 0).length,
-                redBigCount: redBalls.filter(n => n > 16).length,
-                redSmallCount: redBalls.filter(n => n <= 16).length
-            });
-        }
-        
-        return data;
-    }
-
-    // 生成更真实的福彩3D号码
-    generateRealisticFc3dNumber() {
-        // 基于真实福彩3D历史统计的号码生成
-        // 根据真实数据，某些号码组合出现频率更高
-        const hotNumbers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-        const weights = [0.105, 0.108, 0.102, 0.095, 0.098, 0.100, 0.102, 0.105, 0.108, 0.107];
-        
-        let number = '';
-        for (let i = 0; i < 3; i++) {
-            const random = Math.random();
-            let cumulative = 0;
-            for (let j = 0; j < hotNumbers.length; j++) {
-                cumulative += weights[j];
-                if (random <= cumulative) {
-                    number += hotNumbers[j];
-                    break;
-                }
-            }
-        }
-        
-        // 确保不生成全相同数字（如000, 111等，这些在真实开奖中极少出现）
-        if (number[0] === number[1] && number[1] === number[2]) {
-            const newDigit = Math.floor(Math.random() * 10);
-            number = number.substring(0, 2) + newDigit;
-        }
-        
-        return number;
-    }
-
-    // 生成更真实的双色球红球
-    generateRealisticSsqRedBalls() {
-        const redBalls = [];
-        // 基于真实双色球历史统计，某些号码出现频率略高
-        const hotNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
-        const weights = [
-            0.032, 0.031, 0.030, 0.029, 0.028, 0.027, 0.026, 0.025, 0.024, 0.023,
-            0.022, 0.021, 0.020, 0.019, 0.018, 0.017, 0.016, 0.015, 0.014, 0.013,
-            0.012, 0.011, 0.010, 0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003,
-            0.002, 0.001, 0.000
-        ];
-        
-        while (redBalls.length < 6) {
-            const random = Math.random();
-            let cumulative = 0;
-            for (let j = 0; j < hotNumbers.length; j++) {
-                cumulative += weights[j];
-                if (random <= cumulative) {
-                    const num = hotNumbers[j];
-                    if (!redBalls.includes(num)) {
-                        redBalls.push(num);
-                    }
-                    break;
-                }
-            }
-        }
-        
-        return redBalls.sort((a, b) => a - b);
-    }
-
-    // 检查是否需要更新数据
-    shouldUpdateData() {
-        // Render 环境：强制更新
-        if (this.isRender) {
-            return true;
-        }
-        
-        const lastUpdate = localStorage.getItem('lastDataUpdate');
-        if (!lastUpdate) return true;
-        
-        const lastUpdateTime = new Date(lastUpdate);
-        const now = new Date();
-        const hoursDiff = (now - lastUpdateTime) / (1000 * 60 * 60);
-        
-        // 每6小时更新一次
-        return hoursDiff >= 6;
-    }
-
-    // 保存数据到缓存
-    saveDataToCache(type, data) {
-        try {
-            localStorage.setItem(`${type}_data`, JSON.stringify(data));
-            localStorage.setItem(`${type}_timestamp`, new Date().toISOString());
-        } catch (error) {
-            console.log('保存数据到缓存失败:', error);
-        }
-    }
-
-    // 从缓存加载数据
-    loadDataFromCache() {
-        try {
-            if (this.isRender) {
-                console.log('skip cache(render loadDataFromCache)');
-                this.historyData = [];
-                this.ssqHistoryData = [];
-                return;
-            }
-            const fc3dData = localStorage.getItem('fc3d_data');
-            const ssqData = localStorage.getItem('ssq_data');
-            
-            if (fc3dData) {
-                this.historyData = JSON.parse(fc3dData);
-            }
-            
-            if (ssqData) {
-                this.ssqHistoryData = JSON.parse(ssqData);
-            }
-            
-            console.log('从缓存加载数据成功');
-        } catch (error) {
-            console.log('从缓存加载数据失败:', error);
-        }
-    }
-
-    // 更新最后更新时间
-    updateLastUpdateTime() {
-        const now = new Date();
-        localStorage.setItem('lastDataUpdate', now.toISOString());
-        
-        // 更新页面显示
-        const updateTimeElement = document.getElementById('lastUpdateTime');
-        if (updateTimeElement) {
-            updateTimeElement.textContent = now.toLocaleString('zh-CN');
-        }
-    }
-
-    // 更新数据来源显示
-    updateDataSourceDisplay() {
-        const dataSourceElement = document.getElementById('dataSource');
-        if (dataSourceElement) {
-            dataSourceElement.textContent = this.dataSource;
-        }
     }
 
     // 切换往期数据标签页
@@ -1955,36 +1049,6 @@ class LotterySystem {
 
 // 初始化系统
 const lotterySystem = new LotterySystem();
-// 暴露到全局便于诊断
-window.lotterySystem = lotterySystem;
-
-// 强制启用联网（避免本地设置干扰）
-try {
-    lotterySystem.enableNetwork = true;
-    localStorage.setItem('enableNetwork', 'true');
-} catch (_) {}
-
-// 简易调试条：显示API地址与数据源状态
-(function(){
-    try {
-        const bar = document.createElement('div');
-        bar.style.position = 'fixed';
-        bar.style.right = '8px';
-        bar.style.bottom = '8px';
-        bar.style.zIndex = '9999';
-        bar.style.padding = '6px 10px';
-        bar.style.borderRadius = '6px';
-        bar.style.background = 'rgba(0,0,0,.6)';
-        bar.style.color = '#fff';
-        bar.style.fontSize = '12px';
-        const update = () => {
-            bar.textContent = `API: ${lotterySystem.apiBaseUrl || '-'} | 源: ${lotterySystem.dataSource || '-'}`;
-        };
-        update();
-        setInterval(update, 2000);
-        document.body && document.body.appendChild(bar);
-    } catch(_) {}
-})();
 
 // 添加一些实用函数
 function copyToClipboard(text) {
