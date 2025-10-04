@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 真实彩票数据服务器
-从多个官方数据源获取真实的福彩3D和双色球开奖数据
+从官方数据源获取真实的福彩3D和双色球开奖数据
 """
 
 from flask import Flask, jsonify, request, make_response
@@ -14,8 +14,6 @@ import re
 from datetime import datetime, timedelta
 import time
 import logging
-import random
-from urllib.parse import urljoin, urlparse
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -55,34 +53,29 @@ class RealLotteryDataScraper:
             'Upgrade-Insecure-Requests': '1'
         })
         
-        # 数据缓存
-        self.cache = {}
-        self.cache_timeout = 300  # 5分钟缓存
+        # 重试配置
+        self.max_retries = 3
+        self.retry_delay = 2  # 秒
+        
+        # 配置请求超时
+        self.timeout = (5, 15)  # (连接超时, 读取超时)
     
     def get_fc3d_data(self, limit=300):
         """获取福彩3D历史数据"""
-        cache_key = f"fc3d_{limit}"
-        if self._is_cache_valid(cache_key):
-            logger.info("使用缓存的福彩3D数据")
-            return self.cache[cache_key]['data']
-        
         try:
-            # 尝试多个真实数据源（无模拟数据回退）
-            data_sources = [
-                self._scrape_fc3d_from_500_new(),
-                self._scrape_fc3d_from_cwl_new(),
-                self._scrape_fc3d_from_sina_new(),
-                self._scrape_fc3d_from_163()
-            ]
+            # 从中国福彩网获取数据
+            data = self._scrape_fc3d_from_cwl()
+            if data and len(data) > 0:
+                logger.info(f"成功从中国福彩网获取福彩3D数据，共{len(data)}期")
+                return data[:limit]
             
-            for i, data in enumerate(data_sources):
-                if data and len(data) > 0:
-                    logger.info(f"成功从数据源{i+1}获取福彩3D数据，共{len(data)}期")
-                    self._cache_data(cache_key, data)
-                    return data[:limit]
+            # 从中彩网获取数据
+            data = self._scrape_fc3d_from_zhcw()
+            if data and len(data) > 0:
+                logger.info(f"成功从中彩网获取福彩3D数据，共{len(data)}期")
+                return data[:limit]
             
-            # 所有源失败，返回空
-            logger.warning("所有福彩3D数据源都失败")
+            logger.error("无法获取福彩3D数据")
             return []
             
         except Exception as e:
@@ -91,196 +84,32 @@ class RealLotteryDataScraper:
     
     def get_ssq_data(self, limit=300):
         """获取双色球历史数据"""
-        cache_key = f"ssq_{limit}"
-        if self._is_cache_valid(cache_key):
-            logger.info("使用缓存的双色球数据")
-            return self.cache[cache_key]['data']
-        
         try:
-            # 尝试多个数据源
-            data_sources = [
-                self._scrape_ssq_from_500_new(),
-                self._scrape_ssq_from_cwl_new(),
-                self._scrape_ssq_from_sina_new(),
-                self._scrape_ssq_from_163()
-            ]
-            
-            for i, data in enumerate(data_sources):
-                if data and len(data) > 0:
-                    logger.info(f"成功从数据源{i+1}获取双色球数据，共{len(data)}期")
-                    # 不再修改首条记录日期，避免出现“未来开奖作为已开奖”
-                    self._cache_data(cache_key, data)
-                    return data[:limit]
-            
-            # 如果所有源都失败，返回空列表
-            logger.warning("所有双色球数据源都失败")
-            return []
-            
-        except Exception as e:
-            logger.error(f"获取双色球数据失败: {e}")
-            return []
-    
-    def _update_latest_ssq_date(self, data):
-        """更新双色球下一期开奖日期"""
-        if not data:
-            return data
-        
-        try:
-            # 获取当前日期
-            from datetime import datetime, timedelta
-            today = datetime.now()
-            
-            # 双色球开奖时间：周二、四、日 21:15
-            # 计算下一期开奖日期
-            days_since_monday = today.weekday()  # 0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
-            
-            if days_since_monday == 0:  # 周一
-                next_draw = today + timedelta(days=1)  # 明天周二
-            elif days_since_monday == 1:  # 周二
-                next_draw = today + timedelta(days=2)  # 后天周四
-            elif days_since_monday == 2:  # 周三
-                next_draw = today + timedelta(days=1)  # 明天周四
-            elif days_since_monday == 3:  # 周四
-                next_draw = today + timedelta(days=3)  # 后天周日
-            elif days_since_monday == 4:  # 周五
-                next_draw = today + timedelta(days=2)  # 后天周日
-            elif days_since_monday == 5:  # 周六
-                next_draw = today + timedelta(days=1)  # 明天周日
-            else:  # 周日
-                next_draw = today + timedelta(days=2)  # 后天周二
-            
-            # 更新第一条数据的日期为下一期开奖日期
+            # 从中国福彩网获取数据
+            data = self._scrape_ssq_from_cwl()
             if data and len(data) > 0:
-                # 格式化日期
-                weekday_names = ['一', '二', '三', '四', '五', '六', '日']
-                weekday = weekday_names[next_draw.weekday()]
-                next_date = f"{next_draw.strftime('%Y-%m-%d')}({weekday})"
-                
-                # 更新期号（假设是连续递增的）
-                if 'period' in data[0]:
-                    try:
-                        current_period = int(data[0]['period'])
-                        next_period = str(current_period + 1)
-                        data[0]['period'] = next_period
-                    except:
-                        pass
-                
-                data[0]['date'] = next_date
-                logger.info(f"更新双色球下一期开奖日期为: {next_date}")
+                logger.info(f"成功从中国福彩网获取双色球数据，共{len(data)}期")
+                return data[:limit]
             
-            return data
-            
-        except Exception as e:
-            logger.error(f"更新双色球开奖日期失败: {e}")
-            return data
-    
-    def _update_latest_fc3d_date(self, data):
-        """更新福彩3D下一期开奖日期"""
-        if not data:
-            return data
-        
-        try:
-            # 获取当前日期和时间
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            
-            # 福彩3D开奖时间：每天21:15
-            # 以21:15为界，过了21:15就显示第二天的日期
-            if now.hour >= 21 and now.minute >= 15:
-                # 已经过了21:15，下一期是明天
-                next_draw = now + timedelta(days=1)
-            else:
-                # 还没到21:15，下一期是今天
-                next_draw = now
-            
-            # 更新第一条数据的日期为下一期开奖日期
+            # 从中彩网获取数据
+            data = self._scrape_ssq_from_zhcw()
             if data and len(data) > 0:
-                # 格式化日期
-                next_date = next_draw.strftime('%Y-%m-%d')
-                
-                # 更新期号（假设是连续递增的）
-                if 'period' in data[0]:
-                    try:
-                        current_period = int(data[0]['period'])
-                        next_period = str(current_period + 1)
-                        data[0]['period'] = next_period
-                    except:
-                        pass
-                
-                data[0]['date'] = next_date
-                logger.info(f"更新福彩3D下一期开奖日期为: {next_date} (当前时间: {now.strftime('%H:%M')})")
+                logger.info(f"成功从中彩网获取双色球数据，共{len(data)}期")
+                return data[:limit]
             
-            return data
-            
-        except Exception as e:
-            logger.error(f"更新福彩3D开奖日期失败: {e}")
-            return data
-    
-    def _scrape_fc3d_from_500_new(self):
-        """从500.com获取福彩3D数据（新版本）"""
-        try:
-            # 尝试新的URL格式
-            urls = [
-                "https://datachart.500.com/fc3d/history/newinc/history.php",
-                "https://datachart.500.com/fc3d/history/history.shtml",
-                "https://www.500.com/fc3d/history/"
-            ]
-            
-            for url in urls:
-                try:
-                    response = self.session.get(url, timeout=15)
-                    if response.status_code == 200:
-                        response.encoding = 'gb2312'
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        data = self._parse_fc3d_from_html(soup)
-                        if data:
-                            return data
-                except Exception as e:
-                    logger.debug(f"500.com URL {url} 失败: {e}")
-                    continue
-            
+            logger.error("无法获取双色球数据")
             return []
             
         except Exception as e:
-            logger.error(f"从500.com获取福彩3D数据失败: {e}")
+            logger.error(f"双色球 API错误: {e}")
             return []
     
-    def _scrape_ssq_from_500_new(self):
-        """从500.com获取双色球数据（新版本）"""
+    def _scrape_fc3d_from_cwl(self):
+        """从中国福彩网获取福彩3D数据"""
         try:
-            # 尝试新的URL格式
-            urls = [
-                "https://datachart.500.com/ssq/history/newinc/history.php",
-                "https://datachart.500.com/ssq/history/history.shtml",
-                "https://www.500.com/ssq/history/"
-            ]
-            
-            for url in urls:
-                try:
-                    response = self.session.get(url, timeout=15)
-                    if response.status_code == 200:
-                        response.encoding = 'gb2312'
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        data = self._parse_ssq_from_html(soup)
-                        if data:
-                            return data
-                except Exception as e:
-                    logger.debug(f"500.com URL {url} 失败: {e}")
-                    continue
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"从500.com获取双色球数据失败: {e}")
-            return []
-    
-    def _scrape_fc3d_from_cwl_new(self):
-        """从中国福彩网获取福彩3D数据（新版本）"""
-        try:
-            # 使用新的API接口
             url = "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
             params = {
-                'name': 'fc3d',
+                'name': '3d',
                 'issueCount': '300',
                 'issueStart': '',
                 'issueEnd': '',
@@ -288,18 +117,28 @@ class RealLotteryDataScraper:
                 'dayEnd': ''
             }
             
-            response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('state') == 0 and result.get('result'):
-                    data = []
-                    for item in result['result']:
-                        data.append({
-                            'period': item.get('code', ''),
-                            'date': item.get('date', ''),
-                            'number': item.get('red', '')
-                        })
-                    return data
+            headers = {
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Referer': 'https://www.cwl.gov.cn/',
+                'Origin': 'https://www.cwl.gov.cn',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+            
+            for retry in range(self.max_retries):
+                try:
+                    response = self.session.get(url, params=params, headers=headers, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = self._parse_fc3d_from_cwl_api(response)
+                        if data and len(data) > 0:
+                            return data
+                except requests.Timeout:
+                    logger.warning(f"中国福彩网请求超时，第 {retry + 1} 次重试")
+                    if retry < self.max_retries - 1:
+                        time.sleep(self.retry_delay)
+                except Exception as e:
+                    logger.error(f"请求中国福彩网失败: {e}")
+                    if retry < self.max_retries - 1:
+                        time.sleep(self.retry_delay)
             
             return []
             
@@ -307,10 +146,33 @@ class RealLotteryDataScraper:
             logger.error(f"从中国福彩网获取福彩3D数据失败: {e}")
             return []
     
-    def _scrape_ssq_from_cwl_new(self):
-        """从中国福彩网获取双色球数据（新版本）"""
+    def _scrape_fc3d_from_zhcw(self):
+        """从中彩网获取福彩3D数据"""
         try:
-            # 使用新的API接口
+            urls = [
+                "https://www.zhcw.com/kjxx/3d/",
+                "https://www.zhcw.com/kj/3d/"
+            ]
+            
+            for url in urls:
+                try:
+                    response = self.session.get(url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = self._parse_fc3d_from_zhcw_html(response)
+                        if data and len(data) > 0:
+                            return data
+                except Exception as e:
+                    logger.warning(f"中彩网URL {url} 失败: {e}")
+            
+            return []
+            
+        except Exception as e:
+            logger.error(f"从中彩网获取福彩3D数据失败: {e}")
+            return []
+    
+    def _scrape_ssq_from_cwl(self):
+        """从中国福彩网获取双色球数据"""
+        try:
             url = "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
             params = {
                 'name': 'ssq',
@@ -321,19 +183,28 @@ class RealLotteryDataScraper:
                 'dayEnd': ''
             }
             
-            response = self.session.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('state') == 0 and result.get('result'):
-                    data = []
-                    for item in result['result']:
-                        data.append({
-                            'period': item.get('code', ''),
-                            'date': item.get('date', ''),
-                            'redBalls': item.get('red', ''),
-                            'blueBall': item.get('blue', '')
-                        })
-                    return data
+            headers = {
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Referer': 'https://www.cwl.gov.cn/',
+                'Origin': 'https://www.cwl.gov.cn',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+            
+            for retry in range(self.max_retries):
+                try:
+                    response = self.session.get(url, params=params, headers=headers, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = self._parse_ssq_from_cwl_api(response)
+                        if data and len(data) > 0:
+                            return data
+                except requests.Timeout:
+                    logger.warning(f"中国福彩网请求超时，第 {retry + 1} 次重试")
+                    if retry < self.max_retries - 1:
+                        time.sleep(self.retry_delay)
+                except Exception as e:
+                    logger.error(f"请求中国福彩网失败: {e}")
+                    if retry < self.max_retries - 1:
+                        time.sleep(self.retry_delay)
             
             return []
             
@@ -341,236 +212,266 @@ class RealLotteryDataScraper:
             logger.error(f"从中国福彩网获取双色球数据失败: {e}")
             return []
     
-    def _scrape_fc3d_from_sina_new(self):
-        """从新浪获取福彩3D数据（新版本）"""
+    def _scrape_ssq_from_zhcw(self):
+        """从中彩网获取双色球数据"""
         try:
             urls = [
-                "https://match.lottery.sina.com.cn/lotto/pc_zst/index?lottoType=fc3d&actionType=chzs",
-                "https://sports.sina.com.cn/lottery/fc3d/history.shtml"
+                "https://www.zhcw.com/kjxx/ssq/",
+                "https://www.zhcw.com/kj/ssq/"
             ]
             
             for url in urls:
                 try:
-                    response = self.session.get(url, timeout=15)
+                    response = self.session.get(url, timeout=self.timeout)
                     if response.status_code == 200:
-                        response.encoding = 'utf-8'
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        data = self._parse_fc3d_from_html(soup)
-                        if data:
+                        data = self._parse_ssq_from_zhcw_html(response)
+                        if data and len(data) > 0:
                             return data
                 except Exception as e:
-                    logger.debug(f"新浪 URL {url} 失败: {e}")
-                    continue
+                    logger.warning(f"中彩网URL {url} 失败: {e}")
             
             return []
             
         except Exception as e:
-            logger.error(f"从新浪获取福彩3D数据失败: {e}")
+            logger.error(f"从中彩网获取双色球数据失败: {e}")
             return []
     
-    def _scrape_ssq_from_sina_new(self):
-        """从新浪获取双色球数据（新版本）"""
+    def _parse_fc3d_from_cwl_api(self, response):
+        """从中国福彩网API解析福彩3D数据"""
         try:
-            urls = [
-                "https://match.lottery.sina.com.cn/lotto/pc_zst/index?lottoType=ssq&actionType=chzs",
-                "https://sports.sina.com.cn/lottery/ssq/history.shtml"
+            result = response.json()
+            if result.get('state') == 0 and result.get('result'):
+                data = []
+                for item in result['result']:
+                    try:
+                        # 解析开奖号码
+                        number = item.get('red', '').replace(' ', '')
+                        if not number or len(number) != 3:
+                            continue
+                            
+                        # 解析日期和期号
+                        date = item.get('date', '').split(' ')[0]
+                        period = item.get('code', '')
+                        if not date or not period:
+                            continue
+                            
+                        # 计算统计数据
+                        digits = [int(d) for d in number]
+                        data.append({
+                            'period': period,
+                            'date': date,
+                            'number': number,
+                            'sum': sum(digits),
+                            'span': max(digits) - min(digits),
+                            'oddCount': len([d for d in digits if d % 2 == 1]),
+                            'evenCount': len([d for d in digits if d % 2 == 0]),
+                            'bigCount': len([d for d in digits if d >= 5]),
+                            'smallCount': len([d for d in digits if d < 5])
+                        })
+                    except Exception as e:
+                        logger.debug(f"解析单条福彩3D数据失败: {e}")
+                        continue
+                        
+                return data
+            return []
+        except Exception as e:
+            logger.error(f"解析福彩3D数据失败: {e}")
+            return []
+    
+    def _parse_fc3d_from_zhcw_html(self, response):
+        """从中彩网HTML解析福彩3D数据"""
+        try:
+            data = []
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 尝试多种表格选择器
+            selectors = [
+                'table.history-table',
+                'table.kj-table',
+                'table.lott-table',
+                'table[class*="table"]',
+                'table'
             ]
             
-            for url in urls:
-                try:
-                    response = self.session.get(url, timeout=15)
-                    if response.status_code == 200:
-                        response.encoding = 'utf-8'
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        data = self._parse_ssq_from_html(soup)
-                        if data:
-                            return data
-                except Exception as e:
-                    logger.debug(f"新浪 URL {url} 失败: {e}")
-                    continue
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"从新浪获取双色球数据失败: {e}")
-            return []
-    
-    def _scrape_fc3d_from_163(self):
-        """从网易获取福彩3D数据"""
-        try:
-            url = "https://caipiao.163.com/award/fc3d/"
-            response = self.session.get(url, timeout=15)
-            if response.status_code == 200:
-                response.encoding = 'utf-8'
-                soup = BeautifulSoup(response.text, 'html.parser')
-                data = self._parse_fc3d_from_html(soup)
-                if data:
-                    return data
-            return []
-            
-        except Exception as e:
-            logger.error(f"从网易获取福彩3D数据失败: {e}")
-            return []
-    
-    def _scrape_ssq_from_163(self):
-        """从网易获取双色球数据"""
-        try:
-            url = "https://caipiao.163.com/award/ssq/"
-            response = self.session.get(url, timeout=15)
-            if response.status_code == 200:
-                response.encoding = 'utf-8'
-                soup = BeautifulSoup(response.text, 'html.parser')
-                data = self._parse_ssq_from_html(soup)
-                if data:
-                    return data
-            return []
-            
-        except Exception as e:
-            logger.error(f"从网易获取双色球数据失败: {e}")
-            return []
-    
-    def _parse_fc3d_from_html(self, soup):
-        """从HTML中解析福彩3D数据"""
-        data = []
-        
-        # 尝试多种表格选择器
-        selectors = [
-            'table#tdata',
-            'table.tb_0',
-            'table.history-table',
-            'table[class*="table"]',
-            'table'
-        ]
-        
-        for selector in selectors:
-            table = soup.select_one(selector)
-            if table:
-                rows = table.find_all('tr')[1:]  # 跳过表头
-                for row in rows:
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) >= 4:
-                        period = cells[0].get_text(strip=True)
-                        date = cells[1].get_text(strip=True)
-                        number = cells[2].get_text(strip=True)
-                        
-                        # 清理数据
-                        number = re.sub(r'[^\d]', '', number)
-                        
-                        if period and date and number and len(number) == 3:
+            for selector in selectors:
+                table = soup.select_one(selector)
+                if table:
+                    rows = table.find_all('tr')[1:]  # 跳过表头
+                    for row in rows:
+                        try:
+                            cells = row.find_all(['td', 'th'])
+                            if len(cells) < 3:
+                                continue
+                            
+                            # 提取期号
+                            period_text = cells[0].get_text(strip=True)
+                            period_match = re.search(r'\d{7}', period_text)
+                            if not period_match:
+                                continue
+                            period = period_match.group()
+                            
+                            # 提取日期
+                            date_text = cells[1].get_text(strip=True)
+                            date_match = re.search(r'\d{4}-\d{2}-\d{2}', date_text)
+                            if not date_match:
+                                continue
+                            date = date_match.group()
+                            
+                            # 提取号码
+                            number_text = cells[2].get_text(strip=True)
+                            number_match = re.search(r'\d{3}', number_text)
+                            if not number_match:
+                                continue
+                            number = number_match.group()
+                            
+                            # 计算统计数据
+                            digits = [int(d) for d in number]
                             data.append({
                                 'period': period,
                                 'date': date,
-                                'number': number
+                                'number': number,
+                                'sum': sum(digits),
+                                'span': max(digits) - min(digits),
+                                'oddCount': len([d for d in digits if d % 2 == 1]),
+                                'evenCount': len([d for d in digits if d % 2 == 0]),
+                                'bigCount': len([d for d in digits if d >= 5]),
+                                'smallCount': len([d for d in digits if d < 5])
                             })
-                
-                if data:
-                    break
-        
-        return data
+                        except Exception as e:
+                            logger.debug(f"解析单条福彩3D数据失败: {e}")
+                            continue
+                    
+                    if data:
+                        break
+            
+            return data
+        except Exception as e:
+            logger.error(f"解析福彩3D HTML数据失败: {e}")
+            return []
     
-    def _parse_ssq_from_html(self, soup):
-        """从HTML中解析双色球数据"""
-        data = []
-        
-        # 尝试多种表格选择器
-        selectors = [
-            'table#tdata',
-            'table.tb_0',
-            'table.history-table',
-            'table[class*="table"]',
-            'table'
-        ]
-        
-        for selector in selectors:
-            table = soup.select_one(selector)
-            if table:
-                rows = table.find_all('tr')[1:]  # 跳过表头
-                for row in rows:
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) >= 4:
-                        period = cells[0].get_text(strip=True)
-                        date = cells[1].get_text(strip=True)
-                        red_balls = cells[2].get_text(strip=True)
-                        blue_ball = cells[3].get_text(strip=True)
+    def _parse_ssq_from_cwl_api(self, response):
+        """从中国福彩网API解析双色球数据"""
+        try:
+            result = response.json()
+            if result.get('state') == 0 and result.get('result'):
+                data = []
+                for item in result['result']:
+                    try:
+                        # 解析红球
+                        red = item.get('red', '').replace(' ', '')
+                        if not red:
+                            continue
+                        redBalls = [int(x) for x in red.split(',')]
+                        if len(redBalls) != 6:
+                            continue
+                            
+                        # 解析蓝球
+                        blueBall = int(item.get('blue', '0'))
+                        if not blueBall:
+                            continue
+                            
+                        # 解析日期和期号
+                        date = item.get('date', '').split(' ')[0]
+                        period = item.get('code', '')
+                        if not date or not period:
+                            continue
+                            
+                        data.append({
+                            'period': period,
+                            'date': date,
+                            'redBalls': redBalls,
+                            'blueBall': blueBall,
+                            'redSum': sum(redBalls),
+                            'redOddCount': len([n for n in redBalls if n % 2 == 1]),
+                            'redEvenCount': len([n for n in redBalls if n % 2 == 0]),
+                            'redBigCount': len([n for n in redBalls if n > 16]),
+                            'redSmallCount': len([n for n in redBalls if n <= 16])
+                        })
+                    except Exception as e:
+                        logger.debug(f"解析单条双色球数据失败: {e}")
+                        continue
                         
-                        # 清理红球数据
-                        red_balls = re.sub(r'[^\d,]', '', red_balls)
-                        red_list = [x.strip() for x in red_balls.split(',') if x.strip()]
-                        
-                        # 清理蓝球数据
-                        blue_ball = re.sub(r'[^\d]', '', blue_ball)
-                        
-                        if period and date and len(red_list) == 6 and blue_ball:
+                return data
+            return []
+        except Exception as e:
+            logger.error(f"解析双色球数据失败: {e}")
+            return []
+    
+    def _parse_ssq_from_zhcw_html(self, response):
+        """从中彩网HTML解析双色球数据"""
+        try:
+            data = []
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 尝试多种表格选择器
+            selectors = [
+                'table.history-table',
+                'table.kj-table',
+                'table.lott-table',
+                'table[class*="table"]',
+                'table'
+            ]
+            
+            for selector in selectors:
+                table = soup.select_one(selector)
+                if table:
+                    rows = table.find_all('tr')[1:]  # 跳过表头
+                    for row in rows:
+                        try:
+                            cells = row.find_all(['td', 'th'])
+                            if len(cells) < 4:
+                                continue
+                            
+                            # 提取期号
+                            period_text = cells[0].get_text(strip=True)
+                            period_match = re.search(r'\d{7}', period_text)
+                            if not period_match:
+                                continue
+                            period = period_match.group()
+                            
+                            # 提取日期
+                            date_text = cells[1].get_text(strip=True)
+                            date_match = re.search(r'\d{4}-\d{2}-\d{2}', date_text)
+                            if not date_match:
+                                continue
+                            date = date_match.group()
+                            
+                            # 提取红球
+                            red_text = cells[2].get_text(strip=True)
+                            red_numbers = re.findall(r'\d{2}', red_text)
+                            if len(red_numbers) != 6:
+                                continue
+                            redBalls = [int(x) for x in red_numbers]
+                            
+                            # 提取蓝球
+                            blue_text = cells[3].get_text(strip=True)
+                            blue_match = re.search(r'\d{2}', blue_text)
+                            if not blue_match:
+                                continue
+                            blueBall = int(blue_match.group())
+                            
                             data.append({
                                 'period': period,
                                 'date': date,
-                                'redBalls': red_list,
-                                'blueBall': blue_ball
+                                'redBalls': redBalls,
+                                'blueBall': blueBall,
+                                'redSum': sum(redBalls),
+                                'redOddCount': len([n for n in redBalls if n % 2 == 1]),
+                                'redEvenCount': len([n for n in redBalls if n % 2 == 0]),
+                                'redBigCount': len([n for n in redBalls if n > 16]),
+                                'redSmallCount': len([n for n in redBalls if n <= 16])
                             })
-                
-                if data:
-                    break
-        
-        return data
-    
-    def _is_cache_valid(self, key):
-        """检查缓存是否有效"""
-        if key not in self.cache:
-            return False
-        
-        cache_time = self.cache[key]['timestamp']
-        return time.time() - cache_time < self.cache_timeout
-    
-    def _cache_data(self, key, data):
-        """缓存数据"""
-        self.cache[key] = {
-            'data': data,
-            'timestamp': time.time()
-        }
-    
-    def _generate_realistic_fc3d_data(self, count=300):
-        """生成真实的福彩3D测试数据"""
-        data = []
-        today = datetime.now()
-        
-        for i in range(count):
-            # 生成期号（2024年格式）
-            period = f"2024{str(1000 - i).zfill(3)}"
+                        except Exception as e:
+                            logger.debug(f"解析单条双色球数据失败: {e}")
+                            continue
+                    
+                    if data:
+                        break
             
-            # 生成日期（倒推）
-            date = (today - timedelta(days=i)).strftime('%Y-%m-%d')
-            
-            # 生成号码（基于真实统计规律）
-            number = self._generate_realistic_fc3d_number()
-            
-            data.append({
-                'period': period,
-                'date': date,
-                'number': number
-            })
-        
-        return data
-    
-    def _generate_realistic_fc3d_number(self):
-        """生成真实的福彩3D号码"""
-        # 基于真实统计的权重
-        weights = [0.105, 0.108, 0.102, 0.095, 0.098, 0.100, 0.102, 0.105, 0.108, 0.107]
-        
-        number = ''
-        for _ in range(3):
-            rand = random.random()
-            cumulative = 0
-            for i, weight in enumerate(weights):
-                cumulative += weight
-                if rand <= cumulative:
-                    number += str(i)
-                    break
-        
-        # 避免全相同数字
-        if number[0] == number[1] == number[2]:
-            number = number[:2] + str(random.randint(0, 9))
-        
-        return number
+            return data
+        except Exception as e:
+            logger.error(f"解析双色球HTML数据失败: {e}")
+            return []
 
 # 创建爬虫实例
 scraper = RealLotteryDataScraper()
@@ -639,17 +540,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'message': '真实彩票数据服务器运行正常',
-        'cache_size': len(scraper.cache)
-    })
-
-@app.route('/api/clear_cache', methods=['POST'])
-def clear_cache():
-    """清除缓存API"""
-    scraper.cache.clear()
-    return jsonify({
-        'success': True,
-        'message': '缓存已清除'
+        'message': '真实彩票数据服务器运行正常'
     })
 
 if __name__ == '__main__':

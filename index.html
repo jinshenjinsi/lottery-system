@@ -12,7 +12,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎲 福彩3D预选系统</h1>
+            <h1>🎲 福彩3D预选系统 <small id="fc3dLatestDate" style="font-size:0.9rem;color:#eef;opacity:.95;"></small></h1>
             <p class="subtitle">智能号码分析与推荐</p>
         </header>
 
@@ -32,96 +32,9 @@
                 </div>
             </section>
 
-            <!-- 手动选号区域 -->
-            <section class="manual-pick">
-                <h2>手动选号</h2>
-                <div class="number-selector">
-                    <div class="digit-selector">
-                        <label>百位</label>
-                        <select id="hundredsSelect">
-                            <option value="">请选择</option>
-                        </select>
-                    </div>
-                    <div class="digit-selector">
-                        <label>十位</label>
-                        <select id="tensSelect">
-                            <option value="">请选择</option>
-                        </select>
-                    </div>
-                    <div class="digit-selector">
-                        <label>个位</label>
-                        <select id="onesSelect">
-                            <option value="">请选择</option>
-                        </select>
-                    </div>
-                </div>
-                <button id="confirmBtn" class="btn btn-primary">确认选号</button>
-            </section>
-
-            <!-- 历史数据分析 -->
-            <section class="analysis">
-                <h2>📈 数据分析</h2>
-                <div class="analysis-tabs">
-                    <button class="tab-btn active" data-tab="hot-cold">热号冷号</button>
-                    <button class="tab-btn" data-tab="trend">走势分析</button>
-                    <button class="tab-btn" data-tab="pattern">号码规律</button>
-                </div>
-                
-                <div class="tab-content active" id="hot-cold">
-                    <div class="hot-numbers">
-                        <h3>🔥 热号 (最近30期)</h3>
-                        <div class="number-grid" id="hotNumbers"></div>
-                    </div>
-                    <div class="cold-numbers">
-                        <h3>❄️ 冷号 (最近30期)</h3>
-                        <div class="number-grid" id="coldNumbers"></div>
-                    </div>
-                </div>
-
-                <div class="tab-content" id="trend">
-                    <div class="trend-chart">
-                        <h3>📊 号码走势图</h3>
-                        <div class="chart-container">
-                            <canvas id="trendCanvas" width="800" height="400"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="tab-content" id="pattern">
-                    <div class="pattern-analysis">
-                        <h3>🔍 号码规律分析</h3>
-                        <div class="pattern-stats">
-                            <div class="stat-item">
-                                <span class="stat-label">奇偶比例</span>
-                                <span class="stat-value" id="oddEvenRatio">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">大小比例</span>
-                                <span class="stat-value" id="bigSmallRatio">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">和值范围</span>
-                                <span class="stat-value" id="sumRange">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">跨度分析</span>
-                                <span class="stat-value" id="spanAnalysis">-</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- 推荐号码 -->
-            <section class="recommendations">
-                <h2>🎯 智能推荐</h2>
-                <div class="recommendation-grid" id="recommendations"></div>
-                <button id="refreshRecommendations" class="btn btn-outline">🔄 刷新推荐</button>
-            </section>
-
             <!-- 双色球预测板块 -->
             <section class="ssq-prediction">
-                <h2>🔵 双色球预测系统</h2>
+                <h2>🔵 双色球预测系统 <small id="ssqLatestDate" style="font-weight:400;font-size:.9rem;color:#666;"></small></h2>
                 <div class="ssq-container">
                     <!-- 蓝球LSTM预测 -->
                     <div class="blue-ball-section">
@@ -202,7 +115,6 @@
                             <span class="blue-ball" id="completeBlue">0</span>
                         </div>
                         <div class="complete-controls">
-                            <button id="generateCompleteBtn" class="btn btn-primary">🎲 生成完整号码</button>
                             <button id="saveCompleteBtn" class="btn btn-success">💾 保存号码</button>
                         </div>
                     </div>
@@ -212,6 +124,15 @@
             <!-- 往期数据查询 -->
             <section class="history-data">
                 <h2>📊 往期数据查询</h2>
+                <div class="data-update-controls">
+                    <button id="updateDataBtn" class="btn btn-primary">🔄 更新数据</button>
+                    <label class="network-toggle">
+                        <input type="checkbox" id="enableNetworkToggle">
+                        <span>联网更新（iOS上可能触发验证）</span>
+                    </label>
+                    <span class="update-info">数据最后更新：<span id="lastUpdateTime">刚刚</span></span>
+                    <span class="data-source-info">数据来源：<span id="dataSource">本地缓存</span></span>
+                </div>
                 <div class="history-tabs">
                     <button class="tab-btn active" data-tab="fc3d-history">福彩3D历史</button>
                     <button class="tab-btn" data-tab="ssq-history">双色球历史</button>
@@ -320,6 +241,71 @@
         </footer>
     </div>
 
-    <script src="script.js"></script>
+    <!-- 使用带版本号的新文件名，彻底绕过缓存 -->
+    <script src="script.v20251005_02.js"></script>
+    <!-- OCR 库（前端本地识别用） -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+    <script>
+      // 显示版本条，便于确认是否加载了最新构建
+      (function(){
+        try{
+          const bar=document.createElement('div');
+          bar.style.position='fixed';bar.style.left='8px';bar.style.bottom='8px';bar.style.background='rgba(0,0,0,.6)';bar.style.color='#fff';bar.style.padding='4px 8px';bar.style.borderRadius='6px';bar.style.fontSize='12px';bar.style.zIndex='9999';
+          bar.textContent='Frontend Build: __BUILD_20251005_02__';
+          document.body.appendChild(bar);
+        }catch(e){}
+      })();
+    </script>
+
+    <!-- 扫码验奖板块（插入到主内容之前） -->
+    <script>
+      (function(){
+        try{
+          const container = document.querySelector('main');
+          if(!container) return;
+          const section = document.createElement('section');
+          section.className = 'scan-validate';
+          section.innerHTML = `
+            <h2>📷 扫码验奖</h2>
+            <div class="scan-controls">
+              <label>彩种：</label>
+              <select id="scanLotteryType">
+                <option value="ssq">双色球</option>
+                <option value="fc3d">福彩3D</option>
+              </select>
+            </div>
+            <div class="upload-area">
+              <input type="file" id="ticketImage" accept="image/*" capture="environment" />
+              <button id="ocrBtn" class="btn btn-primary">🔍 OCR识别</button>
+            </div>
+            <div class="preview-area">
+              <img id="ticketPreview" style="max-width:100%;display:none;border:1px solid #eee;border-radius:8px;"/>
+            </div>
+            <div class="manual-correct">
+              <div data-type="ssq" id="ssqCorrect">
+                <h4>双色球号码校正</h4>
+                <div>期号：<input id="scanPeriod" style="width:120px" placeholder="如 2025112"/></div>
+                <div style="margin-top:6px">红球：
+                  <input id="scanRed1" size="2"/> <input id="scanRed2" size="2"/>
+                  <input id="scanRed3" size="2"/> <input id="scanRed4" size="2"/>
+                  <input id="scanRed5" size="2"/> <input id="scanRed6" size="2"/>
+                </div>
+                <div style="margin-top:6px">蓝球：<input id="scanBlue" size="2"/></div>
+              </div>
+              <div data-type="fc3d" id="fc3dCorrect" style="display:none">
+                <h4>福彩3D号码校正</h4>
+                <div>期号：<input id="scan3dPeriod" style="width:120px" placeholder="如 2024999"/></div>
+                <div style="margin-top:6px">号码：<input id="scan3d" size="4" placeholder="三位数，如 123"/></div>
+              </div>
+            </div>
+            <div style="margin-top:10px">
+              <button id="validateBtn" class="btn btn-success">✅ 验证是否中奖</button>
+            </div>
+            <div id="validateResult" style="margin-top:10px;color:#333"></div>
+          `;
+          container.insertBefore(section, container.firstChild);
+        }catch(e){}
+      })();
+    </script>
 </body>
 </html>
