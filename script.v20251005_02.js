@@ -1240,6 +1240,19 @@ class LotterySystem {
             console.error('筛选双色球历史数据失败:', error);
         }
     }
+
+    // 设置扫码验奖相关功能
+    setupScanValidate() {
+        try {
+            console.log('设置扫码验奖功能');
+            // 扫码验奖功能现在由独立的ScanValidate类处理
+            // 这里只做一些基本的状态检查
+            this.scanValidateAvailable = true;
+            console.log('扫码验奖功能已就绪');
+        } catch (error) {
+            console.error('设置扫码验奖功能失败:', error);
+        }
+    }
 }
 
 // 初始化系统
@@ -1297,4 +1310,583 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('福彩3D预选系统已启动！');
     console.log('快捷键：R-随机选号，L-幸运号码，A-智能分析');
+});
+
+// ===== 扫码验奖功能实现 =====
+
+class ScanValidate {
+    constructor() {
+        this.cameraActive = false;
+        this.stream = null;
+        this.updateStatusDelay = 1000; // 延迟初始化UI
+        setTimeout(() => this.initScanValidateUI(), this.updateStatusDelay);
+    }
+
+    async initScanValidateUI() {
+        try {
+            console.log('初始化扫码验奖界面...');
+            
+            // 等待DOM元素创建完成
+            await this.waitForElement('scanLotteryType');
+            
+            // 设置事件监听器
+            this.setupScanEventListeners();
+            
+            // 初始化彩种选择
+            this.switchLotteryType('ssq');
+            
+            console.log('扫码验奖界面初始化完成');
+        } catch (error) {
+            console.error('扫码验奖界面初始化失败:', error);
+        }
+    }
+
+    async waitForElement(elementId, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            const startTime = Date.now();
+            const checkElement = () => {
+                if (document.getElementById(elementId)) {
+                    resolve();
+                } else if (Date.now() - startTime > timeout) {
+                    reject(new Error(`元素 ${elementId} 未找到`));
+                } else {
+                    setTimeout(checkElement, 100);
+                }
+            };
+            checkElement();
+        });
+    }
+
+    setupScanEventListeners() {
+        try {
+            // 彩种切换
+            const lotteryTypeSelect = document.getElementById('scanLotteryType');
+            if (lotteryTypeSelect) {
+                lotteryTypeSelect.addEventListener('change', (e) => {
+                    this.switchLotteryType(e.target.value);
+                });
+            }
+
+            // 摄像头控制
+            this.addEventListenerScan('startCameraBtn', 'click', () => this.startCamera());
+            this.addEventListenerScan('stopCameraBtn', 'click', () => this.stopCamera());
+            this.addEventListenerScan('captureBtn', 'click', () => this.captureAndOCR());
+            
+            // 文件输入
+            const ticketImageInput = document.getElementById('ticketImage');
+            if (ticketImageInput) {
+                ticketImageInput.addEventListener('change', (e) => this.handleFileUpload(e));
+            }
+
+            // OCR识别按钮
+            this.addEventListenerScan('ocrBtn', 'click', () => this.performOCR());
+
+            // 验证按钮
+            this.addEventListenerScan('validateBtn', 'click', () => this.validateTicket());
+
+            console.log('扫码验证事件监听器设置完成');
+        } catch (error) {
+            console.error('设置扫码验证事件监听器失败:', error);
+        }
+    }
+
+    addEventListenerScan(elementId, eventType, handler) {
+        try {
+            const element = document.getElementById(elementId);
+            if (element && handler) {
+                element.addEventListener(eventType, handler);
+                console.log(`成功为 ${elementId} 添加 ${eventType} 事件监听器`);
+            } else if (element && eventType === 'click') {
+                // 如果是OCR按钮点击事件
+                element.addEventListener('click', () => this.performOCR());
+                console.log(`为 ${elementId} 添加默认点击事件监听器`);
+            }
+        } catch (error) {
+            console.error(`为 ${elementId} 添加事件监听器失败:`, error);
+        }
+    }
+
+    switchLotteryType(type) {
+        try {
+            console.log('切换彩种类型:', type);
+            const ssqCorrect = document.getElementById('ssqCorrect');
+            const fc3dCorrect = document.getElementById('fc3dCorrect');
+            
+            if (ssqCorrect && fc3dCorrect) {
+                if (type === 'ssq') {
+                    ssqCorrect.style.display = 'block';
+                    fc3dCorrect.style.display = 'none';
+                } else {
+                    ssqCorrect.style.display = 'none';
+                    fc3dCorrect.style.display = 'block';
+                }
+            }
+        } catch (error) {
+            console.error('切换彩种类型失败:', error);
+        }
+    }
+
+    async startCamera() {
+        try {
+            console.log('启动摄像头...');
+            this.updateCameraStatus('正在启动摄像头...');
+
+            const video = document.getElementById('cameraVideo');
+            const startBtn = document.getElementById('startCameraBtn');
+            const stopBtn = document.getElementById('stopCameraBtn');
+            const captureBtn = document.getElementById('captureBtn');
+
+            const constraints = {
+                video: {
+                    facingMode: 'environment', // 使用后置摄像头
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = this.stream;
+            video.style.display = 'block';
+            
+            // 显示控制按钮
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            captureBtn.style.display = 'inline-block';
+            
+            this.cameraActive = true;
+            this.updateCameraStatus('摄像头已启动，请对准彩票票面');
+
+            console.log('摄像头启动成功');
+        } catch (error) {
+            console.error('摄像头启动失败:', error);
+            let errorMessage = '摄像头启动失败: ';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage += '请允许访问摄像头权限';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage += '未找到摄像头设备';
+            } else {
+                errorMessage += error.message;
+            }
+            
+            this.updateCameraStatus(errorMessage);
+            alert(errorMessage);
+        }
+    }
+
+    stopCamera() {
+        try {
+            console.log('关闭摄像头...');
+            
+            const video = document.getElementById('cameraVideo');
+            const startBtn = document.getElementById('startCameraBtn');
+            const stopBtn = document.getElementById('stopCameraBtn');
+            const captureBtn = document.getElementById('captureBtn');
+
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+
+            video.style.display = 'none';
+            video.srcObject = null;
+            
+            // 隐藏控制按钮
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'none';
+            captureBtn.style.display = 'none';
+            
+            this.cameraActive = false;
+            this.updateCameraStatus('摄像头已关闭');
+
+            console.log('摄像头关闭成功');
+        } catch (error) {
+            console.error('关闭摄像头失败:', error);
+        }
+    }
+
+    async captureAndOCR() {
+        try {
+            console.log('拍照并进行OCR识别...');
+            this.updateCameraStatus('正在拍照...');
+
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('cameraCanvas');
+            const previewImg = document.getElementById('ticketPreview');
+
+            // 设置canvas尺寸
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // 绘制视频帧到canvas
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            // 转换为图片
+            const dataURL = canvas.toDataURL('image/png');
+            previewImg.src = dataURL;
+            previewImg.style.display = 'block';
+
+            this.updateCameraStatus('拍照完成，正在进行OCR识别...');
+
+            // 执行OCR识别
+            await this.performOCR(dataURL);
+
+        } catch (error) {
+            console.error('拍照OCR失败:', error);
+            this.updateCameraStatus('拍照失败: ' + error.message);
+        }
+    }
+
+    handleFileUpload(event) {
+        try {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            console.log('处理文件上传:', file.name);
+            this.updateCameraStatus('正在加载图片...');
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const previewImg = document.getElementById('ticketPreview');
+                previewImg.src = e.target.result;
+                previewImg.style.display = 'block';
+                
+                await this.performOCR(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('文件处理失败:', error);
+            this.updateCameraStatus('文件处理失败: ' + error.message);
+        }
+    }
+
+    async performOCR(imageData = null) {
+        try {
+            console.log('开始OCR识别...');
+            this.updateCameraStatus('正在进行OCR文字识别...');
+
+            let img = imageData;
+            if (!img) {
+                const previewImg = document.getElementById('ticketPreview');
+                if (!previewImg.src) {
+                    throw new Error('请先上传图片或使用摄像头拍照');
+                }
+                img = previewImg.src;
+            }
+
+            // 使用Tesseract.js进行OCR识别
+            const worker = Tesseract.createWorker({
+                logger: m => console.log('OCR进展:', m)
+            });
+
+            await worker.load();
+            await worker.loadLanguage('chi_sim+eng'); // 加载中文简体+英文
+            await worker.initialize('chi_sim+eng');
+
+            const { data: { text } } = await worker.recognize(img);
+            
+            await worker.terminate();
+
+            // 显示OCR结果
+            this.displayOCRResult(text);
+            
+            // 自动解析号码
+            this.parseLotteryNumbers(text);
+            
+            this.updateCameraStatus('OCR识别完成');
+
+            console.log('OCR识别成功:', text);
+        } catch (error) {
+            console.error('OCR识别失败:', error);
+            this.updateCameraStatus('OCR识别失败: ' + error.message);
+        }
+    }
+
+    displayOCRResult(text) {
+        try {
+            const ocrResult = document.getElementById('ocrResult');
+            const rawOcrText = document.getElementById('rawOcrText');
+            
+            if (ocrResult && rawOcrText) {
+                ocrResult.style.display = 'block';
+                rawOcrText.textContent = text || '未识别到文字';
+            }
+        } catch (error) {
+            console.error('显示OCR结果失败:', error);
+        }
+    }
+
+    parseLotteryNumbers(text) {
+        try {
+            console.log('解析彩票号码...');
+            
+            const lotteryType = document.getElementById('scanLotteryType').value;
+            
+            if (lotteryType === 'ssq') {
+                this.parseSSQNumbers(text);
+            } else {
+                this.parseFC3DNumbers(text);
+            }
+        } catch (error) {
+            console.error('解析彩票号码失败:', error);
+        }
+    }
+
+    parseSSQNumbers(text) {
+        try {
+            // 解析双色球号码
+            const periodMatch = text.match(/(\d{7})/);
+            if (periodMatch) {
+                document.getElementById('scanPeriod').value = periodMatch[1];
+            }
+
+            // 解析红球号码
+            const redMatches = text.match(/\b([1-3]?[0-9])\b/g);
+            if (redMatches && redMatches.length >= 6) {
+                const redNumbers = redMatches.slice(0, 6).map(num => parseInt(num).toString().padStart(2, '0'));
+                redNumbers.forEach((num, index) => {
+                    const input = document.getElementById(`scanRed${index + 1}`);
+                    if (input) input.value = num;
+                });
+            }
+
+            // 解析蓝球号码
+            const blueMatch = text.match(/\b([1-9]|[1-2][0-6])\b/);
+            if (blueMatch) {
+                document.getElementById('scanBlue').value = blueMatch[1].padStart(2, '0');
+            }
+
+            console.log('双色球号码解析完成');
+        } catch (error) {
+            console.error('解析双色球号码失败:', error);
+        }
+    }
+
+    parseFC3DNumbers(text) {
+        try {
+            // 解析福彩3D期号
+            const periodMatch = text.match(/(\d{7})/);
+            if (periodMatch) {
+                document.getElementById('scan3dPeriod').value = periodMatch[1];
+            }
+
+            // 解析福彩3D号码
+            const fc3dMatch = text.match(/(\d{3})/);
+            if (fc3dMatch) {
+                document.getElementById('scan3d').value = fc3dMatch[1];
+            }
+
+            console.log('福彩3D号码解析完成');
+        } catch (error) {
+            console.error('解析福彩3D号码失败:', error);
+        }
+    }
+
+    async validateTicket() {
+        try {
+            console.log('验证彩票中奖情况...');
+            
+            const lotteryType = document.getElementById('scanLotteryType').value;
+            let result = null;
+
+            if (lotteryType === 'ssq') {
+                result = await this.validateSSQTicket();
+            } else {
+                result = await this.validateFC3DTicket();
+            }
+
+            this.displayValidationResult(result);
+
+        } catch (error) {
+            console.error('验证彩票失败:', error);
+            this.displayValidationResult({
+                success: false,
+                message: '验证失败: ' + error.message
+            });
+        }
+    }
+
+    async validateSSQTicket() {
+        try {
+            const period = document.getElementById('scanPeriod').value;
+            const redBalls = [];
+            for (let i = 1; i <= 6; i++) {
+                const red = document.getElementById(`scanRed${i}`).value;
+                if (red) redBalls.push(parseInt(red));
+            }
+            const blueBall = parseInt(document.getElementById('scanBlue').value);
+
+            if (!period || redBalls.length !== 6 || !blueBall) {
+                throw new Error('请填写完整的双色球号码信息');
+            }
+
+            // 检查当前历史数据中是否有对应的开奖结果
+            const historyData = window.lotterySystem.ssqHistoryData;
+            if (!historyData || historyData.length === 0) {
+                throw new Error('当前无历史数据，无法验证');
+            }
+
+            const drawData = historyData.find(item => item.period === period);
+            if (!drawData) {
+                return {
+                    success: false,
+                    message: `未找到第${period}期的开奖记录`,
+                    isDrawFound: false
+                };
+            }
+
+            // 检查中奖情况
+            const matchingReds = redBalls.filter(ball => drawData.redBalls.includes(ball)).length;
+            const matchingBlue = blueBall === drawData.blueBall;
+
+            let prize = '未中奖';
+            let resultMessage = `第${period}期开奖号码: ${drawData.redBalls.join(' ')} + ${drawData.blueBall}`;
+
+            if (matchingReds === 6 && matchingBlue) {
+                prize = '一等奖 (6红+1蓝)';
+            } else if (matchingReds === 6 && !matchingBlue) {
+                prize = '二等奖 (6红+0蓝)';
+            } else if (matchingReds === 5 && matchingBlue) {
+                prize = '三等奖 (5红+1蓝)';
+            } else if (matchingReds === 5 || (matchingReds === 4 && matchingBlue)) {
+                prize = '四等奖';
+            } else if (matchingReds === 4 || (matchingReds === 3 && matchingBlue)) {
+                prize = '五等奖';
+            } else if (matchingBlue || matchingReds >= 4) {
+                prize = '六等奖';
+            }
+
+            return {
+                success: true,
+                lotteryType: '双色球',
+                period: period,
+                drawInfo: drawData,
+                resultMessage: resultMessage,
+                prize: prize,
+                matchingReds: matchingReds,
+                matchingBlue: matchingBlue
+            };
+
+        } catch (error) {
+            console.error('双色球验证失败:', error);
+            throw error;
+        }
+    }
+
+    async validateFC3DTicket() {
+        try {
+            const period = document.getElementById('scan3dPeriod').value;
+            const number = document.getElementById('scan3d').value;
+
+            if (!period || !number || number.length !== 3) {
+                throw new Error('请填写完整的福彩3D号码信息');
+            }
+
+            // 检查当前历史数据中是否有对应的开奖结果
+            const historyData = window.lotterySystem.historyData;
+            if (!historyData || historyData.length === 0) {
+                throw new Error('当前无历史数据，无法验证');
+            }
+
+            const drawData = historyData.find(item => item.period === period);
+            if (!drawData) {
+                return {
+                    success: false,
+                    message: `未找到第${period}期的开奖记录`,
+                    isDrawFound: false
+                };
+            }
+
+            // 检查中奖情况
+            let prize = '未中奖';
+            let resultMessage = `第${period}期开奖号码: ${drawData.number}`;
+
+            if (number === drawData.number) {
+                prize = '直选 (顺序完全相同)';
+            } else {
+                const inputDigits = number.split('').map(d => parseInt(d)).sort();
+                const drawDigits = drawData.number.split('').map(d => parseInt(d)).sort();
+                
+                if (inputDigits.join('') === drawDigits.join('')) {
+                    prize = '组选 (数字相同但顺序不同)';
+                }
+            }
+
+            return {
+                success: true,
+                lotteryType: '福彩3D',
+                period: period,
+                drawInfo: drawData,
+                resultMessage: resultMessage,
+                prize: prize,
+                userNumber: number,
+                drawNumber: drawData.number
+            };
+
+        } catch (error) {
+            console.error('福彩3D验证失败:', error);
+            throw error;
+        }
+    }
+
+    displayValidationResult(result) {
+        try {
+            const resultDiv = document.getElementById('validateResult');
+            const detailsDiv = document.getElementById('resultDetails');
+            
+            if (!resultDiv || !detailsDiv) return;
+
+            if (!result.success) {
+                detailsDiv.innerHTML = `
+                    <div style="color: #d32f2f; font-weight: bold;">
+                        ❌ ${result.message}
+                    </div>
+                `;
+            } else {
+                const color = result.prize === '未中奖' ? '#666' : '#1976d2';
+                detailsDiv.innerHTML = `
+                    <div style="font-size: 16px; font-weight: bold; color: ${color}; margin-bottom: 10px;">
+                        ${result.prize === '未中奖' ? '😔' : '🎉'} ${result.prize}
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>${result.resultMessage}</strong>
+                    </div>
+                    <div style="font-size: 14px; color: #666;">
+                        ${result.lotteryType} / 第${result.period}期
+                    </div>
+                `;
+            }
+
+            resultDiv.style.display = 'block';
+
+        } catch (error) {
+            console.error('显示验证结果失败:', error);
+        }
+    }
+
+    updateCameraStatus(message) {
+        try {
+            const statusElement = document.getElementById('cameraStatus');
+            if (statusElement) {
+                statusElement.textContent = message;
+                console.log('摄像头状态:', message);
+            }
+        } catch (error) {
+            console.error('更新摄像头状态失败:', error);
+        }
+    }
+}
+
+// 初始化扫码验证系统
+let scanValidateSystem = null;
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        try {
+            scanValidateSystem = new ScanValidate();
+            window.scanValidateSystem = scanValidateSystem; // 暴露到全局便于调试
+        } catch (error) {
+            console.error('扫码验证系统初始化失败:', error);
+        }
+    }, 2000); // 延迟2秒确保其他组件初始化完成
 });

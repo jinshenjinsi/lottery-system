@@ -274,34 +274,88 @@
                 <option value="fc3d">福彩3D</option>
               </select>
             </div>
-            <div class="upload-area">
+            
+            <!-- 摄像头区域 -->
+            <div class="camera-section" style="margin: 15px 0;">
+              <div class="camera-controls" style="display:flex;gap:10px;margin-bottom:10px;">
+                <button id="startCameraBtn" class="btn btn-primary">📷 启动摄像头</button>
+                <button id="stopCameraBtn" class="btn btn-secondary" style="display:none;">⏹️ 关闭摄像头</button>
+                <button id="captureBtn" class="btn btn-success" style="display:none;">📸 拍照扫描</button>
+              </div>
+              <div id="cameraContainer" style="position:relative;width:100%;max-width:400px;margin:0 auto;">
+                <video id="cameraVideo" autoplay playsinline style="width:100%;border-radius:8px;display:none;"></video>
+                <canvas id="cameraCanvas" style="display:none;"></canvas>
+              </div>
+              <div id="cameraStatus" style="margin-top:5px;font-size:14px;color:#666;"></div>
+            </div>
+            
+            <!-- 文件上传区域 -->
+            <div class="upload-area" style="border:2px dashed #ccc;padding:20px;text-align:center;border-radius:8px;margin:15px 0;">
+              <p>或者选择图片文件：</p>
               <input type="file" id="ticketImage" accept="image/*" capture="environment" />
-              <button id="ocrBtn" class="btn btn-primary">🔍 OCR识别</button>
+              <button id="ocrBtn" class="btn btn-primary" style="margin-left:10px;">🔍 OCR识别</button>
             </div>
-            <div class="preview-area">
-              <img id="ticketPreview" style="max-width:100%;display:none;border:1px solid #eee;border-radius:8px;"/>
-            </div>
-            <div class="manual-correct">
-              <div data-type="ssq" id="ssqCorrect">
-                <h4>双色球号码校正</h4>
-                <div>期号：<input id="scanPeriod" style="width:120px" placeholder="如 2025112"/></div>
-                <div style="margin-top:6px">红球：
-                  <input id="scanRed1" size="2"/> <input id="scanRed2" size="2"/>
-                  <input id="scanRed3" size="2"/> <input id="scanRed4" size="2"/>
-                  <input id="scanRed5" size="2"/> <input id="scanRed6" size="2"/>
+            
+            <!-- 图片预览区域 -->
+            <div class="preview-area" style="margin:15px 0;">
+              <h4>扫描结果预览：</h4>
+              <div style="display:flex;gap:15px;align-items:flex-start;">
+                <div style="flex:1;">
+                  <img id="ticketPreview" style="max-width:100%;border:1px solid #eee;border-radius:8px;display:none;"/>
                 </div>
-                <div style="margin-top:6px">蓝球：<input id="scanBlue" size="2"/></div>
+                <div style="flex:1;">
+                  <div id="ocrResult" style="background:#f5f5f5;padding:10px;border-radius:8px;min-height:100px;display:none;">
+                    <h5>OCR识别结果：</h5>
+                    <pre id="rawOcrText" style="font-family:monospace;font-size:12px;white-space:pre-wrap;"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 手动校正区域 -->
+            <div class="manual-correct" style="background:#f9f9f9;margin-top:20px;">
+              <h4>🔧 手动校正号码</h4>
+              <div data-type="ssq" id="ssqCorrect">
+                <h5>双色球号码校正</h5>
+                <div style="margin:8px 0;">
+                  <label>期号：</label>
+                  <input id="scanPeriod" style="width:120px;padding:4px;" placeholder="如 2025112"/>
+                </div>
+                <div style="margin:8px 0;">
+                  <label>红球：</label>
+                  <input id="scanRed1" size="2" style="margin:2px;text-align:center;"/> 
+                  <input id="scanRed2" size="2" style="margin:2px;text-align:center;"/>
+                  <input id="scanRed3" size="2" style="margin:2px;text-align:center;"/> 
+                  <input id="scanRed4" size="2" style="margin:2px;text-align:center;"/>
+                  <input id="scanRed5" size="2" style="margin:2px;text-align:center;"/> 
+                  <input id="scanRed6" size="2" style="mode:2px;text-align:center;"/>
+                </div>
+                <div style="margin:8px 0;">
+                  <label>蓝球：</label>
+                  <input id="scanBlue" size="2" style="text-align:center;"/>
+                </div>
               </div>
               <div data-type="fc3d" id="fc3dCorrect" style="display:none">
-                <h4>福彩3D号码校正</h4>
-                <div>期号：<input id="scan3dPeriod" style="width:120px" placeholder="如 2024999"/></div>
-                <div style="margin-top:6px">号码：<input id="scan3d" size="4" placeholder="三位数，如 123"/></div>
+                <h5>福彩3D号码校正</h5>
+                <div style="margin:8px 0;">
+                  <label>期号：</label>
+                  <input id="scan3dPeriod" style="width:120px;padding:4px;" placeholder="如 2024999"/>
+                </div>
+                <div style="margin:8px 0;">
+                  <label>号码：</label>
+                  <input id="scan3d" size="4" style="text-align:center;" placeholder="三位数，如 123"/>
+                </div>
               </div>
             </div>
-            <div style="margin-top:10px">
-              <button id="validateBtn" class="btn btn-success">✅ 验证是否中奖</button>
+            
+            <!-- 验证按钮和结果显示 -->
+            <div style="margin-top:15px;text-align:center;">
+              <button id="validateBtn" class="btn btn-success" style="padding:10px 20px;">✅ 验证是否中奖</button>
             </div>
-            <div id="validateResult" style="margin-top:10px;color:#333"></div>
+            <div id="validateResult" style="margin-top:15px;padding:15px;border-radius:8px;background:#e8f4fd;display:none;">
+              <h4>🎯 验证结果</h4>
+              <div id="resultDetails"></div>
+            </div>
           `;
           container.insertBefore(section, container.firstChild);
         }catch(e){}
